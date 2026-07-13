@@ -324,6 +324,52 @@ Never commit or push unless explicitly instructed.
 
 ---
 
+# AI Alert Explanation Layer
+
+The project will include an optional AI Security Analyst feature in a later development phase.
+
+The deterministic detection engine remains authoritative.
+
+The AI may:
+
+- Explain what happened in plain language.
+- Explain why a detector triggered.
+- Summarise the supporting evidence.
+- Describe confidence and severity.
+- Explain possible false positives.
+- Explain known limitations.
+- Recommend defensive investigation or response steps.
+
+The AI must never:
+
+- Create alerts independently.
+- Suppress alerts.
+- Automatically change alert severity.
+- Execute commands.
+- Control the attack simulator.
+- Modify detection thresholds.
+- Receive full packet payloads.
+- Receive passwords, cookies, tokens, credentials or secrets.
+- Present uncertain analysis as confirmed fact.
+
+Architecture requirements:
+
+- Keep AI code separate from detection, API and storage logic.
+- Use a provider abstraction rather than coupling the project to one company.
+- Support hosted providers, a future local provider and a disabled mode.
+- Prefer a provider-independent HTTP interface where practical.
+- Configure providers using environment variables.
+- Include timeouts, input limits, output validation and retry limits.
+- Include rate limiting and caching where appropriate.
+- Send only sanitised structured alert metadata.
+- Clearly label explanations as AI-generated.
+- Provide deterministic fallback explanations when AI is unavailable.
+- The complete application must continue working without an AI provider or API key.
+- Never claim that an external API is permanently free.
+- Do not add an AI provider or SDK until the AI integration phase is approved.
+
+--- 
+
 # Final Reminder
 
 Build this project as if it were being developed by a professional cybersecurity company.
