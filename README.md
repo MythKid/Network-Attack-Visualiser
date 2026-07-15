@@ -1,5 +1,7 @@
 # Network Attack Visualiser
 
+[![CI](https://github.com/MythKid/Network-Attack-Visualiser/actions/workflows/ci.yml/badge.svg)](https://github.com/MythKid/Network-Attack-Visualiser/actions/workflows/ci.yml)
+
 Real-time detection and visualisation of network attacks in an **isolated, authorised Docker laboratory**. The system ingests network traffic, runs transparent heuristic detectors (TCP port scans and suspicious SYN activity), stores alerts, and presents them live on a web dashboard.
 
 This is a **defensive** networking and cybersecurity project, developed as a student portfolio project and built to graduate-level standards.
@@ -14,7 +16,7 @@ This project is for **education, research and authorised laboratory environments
 
 ## Project Status
 
-**Design phase (Phase 0) complete.** There is **no application code yet** — this repository currently contains the full Version 1 design specification. Development proceeds one approved phase at a time.
+**Design (Phase 0) and the tooling/CI baseline (Phase 0.5) are complete.** There is still **no application code yet** — the repository currently contains the full Version 1 design specification plus the quality and continuous-integration scaffolding (Ruff, mypy, Pytest, pre-commit and GitHub Actions). Development proceeds one approved phase at a time; the backend skeleton is Phase 1.
 
 - Current progress: [docs/PROJECT_PROGRESS.md](docs/PROJECT_PROGRESS.md)
 - Phase plan and acceptance criteria: [docs/DEVELOPMENT_PHASES.md](docs/DEVELOPMENT_PHASES.md)
@@ -63,6 +65,34 @@ This project is for **education, research and authorised laboratory environments
 
 ---
 
+## Development
+
+The repository ships with a lightweight, pip-compatible tooling baseline. Development tools are pinned in [requirements-dev.txt](requirements-dev.txt); their configuration lives in [pyproject.toml](pyproject.toml).
+
+```bash
+# From the repository root
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -r requirements-dev.txt
+
+# Optional: install the git pre-commit hook
+pre-commit install
+```
+
+Quality checks (all run in CI on Python 3.12 for every push and pull request):
+
+```bash
+ruff check .            # lint
+ruff format --check .   # formatting
+mypy                    # static type checking
+pytest                  # tests
+pre-commit run --all-files
+```
+
+Docker Compose validation is wired into CI **conditionally**: it is skipped while no Compose file exists and becomes a mandatory gate in Phase 6, when `docker-compose.yml` is introduced.
+
+---
+
 ## Licence
 
-**Licence selection is in progress.** The `LICENSE` file is intentionally not yet populated; licence choice is recorded as an open decision (MIT recommended) to be resolved in Phase 0.5. See [docs/PROJECT_PROGRESS.md](docs/PROJECT_PROGRESS.md).
+Licensed under the **MIT License** — see [LICENSE](LICENSE). Copyright (c) 2026 Methindu Damsara.

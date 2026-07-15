@@ -368,7 +368,7 @@ Architecture requirements:
 - Never claim that an external API is permanently free.
 - Do not add an AI provider or SDK until the AI integration phase is approved.
 
---- 
+---
 
 # Final Reminder
 

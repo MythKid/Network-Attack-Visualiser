@@ -16,9 +16,9 @@ Development proceeds **one approved phase at a time**. No phase begins without e
 
 | Phase | Title | Status |
 | --- | --- | --- |
-| 0 | Design documentation | In review (this phase) |
-| 0.5 | Tooling and CI baseline | **Approved**, not started |
-| 1 | Backend skeleton | Planned |
+| 0 | Design documentation | Complete |
+| 0.5 | Tooling and CI baseline | Complete |
+| 1 | Backend skeleton | Planned (next) |
 | 2 | Detection engine + synthetic events | Planned |
 | 3 | Alert pipeline (storage, REST, WebSocket) | Planned |
 | 4 | Frontend dashboard | Planned |

@@ -1,0 +1,13 @@
+# Development-tool dependencies for the Network Attack Visualiser.
+#
+# Pip-compatible and intentionally minimal — no Poetry/uv/Pipenv/Conda.
+# These are DEVELOPMENT tools only; no application dependencies (FastAPI,
+# Scapy, Pydantic, ...) are added until the phases that require them.
+#
+# Exact pins keep CI reproducible. Bump deliberately (e.g. via a reviewed PR),
+# not implicitly.
+
+ruff==0.15.21
+mypy==2.3.0
+pytest==9.1.1
+pre-commit==4.6.0

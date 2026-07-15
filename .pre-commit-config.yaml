@@ -1,0 +1,36 @@
+# Pre-commit hooks for the Network Attack Visualiser.
+#
+# Deliberately lightweight for Phase 0.5: Ruff (lint + format) plus a small set
+# of fast, repository-hygiene checks. mypy is intentionally NOT a pre-commit
+# hook — it runs in CI, where it is quicker and more predictable — matching the
+# tooling design in docs/DEVELOPMENT_PHASES.md and docs/TESTING_STRATEGY.md.
+#
+# CI runs `pre-commit run --all-files` with SKIP=ruff,ruff-format so the two
+# Ruff hooks are not re-run after the explicit `ruff check` / `ruff format`
+# steps.
+
+minimum_pre_commit_version: "4.0.0"
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.21
+    hooks:
+      - id: ruff
+        name: ruff (lint)
+        args: [--fix]
+      - id: ruff-format
+        name: ruff (format)
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: detect-private-key

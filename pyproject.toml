@@ -1,0 +1,59 @@
+# Tooling configuration for the Network Attack Visualiser.
+#
+# Phase 0.5 (Tooling and CI Baseline): this file configures Ruff, mypy and
+# Pytest only. It intentionally declares NO build system and NO project
+# packaging metadata — there is no distributable package yet, and application
+# dependencies (FastAPI, Scapy, Pydantic, ...) are introduced in later approved
+# phases. Development tools are pinned in requirements-dev.txt.
+
+# --------------------------------------------------------------------------- #
+# Ruff — linter + formatter
+# --------------------------------------------------------------------------- #
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# A sensible, proportionate rule set — not maximalist. Deliberately excludes
+# heavy/opinionated families (forced docstrings, annotation coverage, Pylint)
+# so early development is not obstructed; these can be tightened in later phases.
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort (import ordering)
+    "B",   # flake8-bugbear (likely bugs)
+    "UP",  # pyupgrade (modern syntax)
+    "SIM", # flake8-simplify
+    "C4",  # flake8-comprehensions
+    "RUF", # Ruff-specific rules
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# --------------------------------------------------------------------------- #
+# mypy — static type checking (pragmatic, tightened over time, not strict yet)
+# --------------------------------------------------------------------------- #
+[tool.mypy]
+python_version = "3.12"
+files = ["backend/app", "backend/tests"]
+mypy_path = "backend"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+
+# --------------------------------------------------------------------------- #
+# Pytest
+# --------------------------------------------------------------------------- #
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q"
+testpaths = ["backend/tests"]
+# Make the in-repo `app` package importable without installing it (no editable
+# install / build backend needed for the Phase 0.5 skeleton).
+pythonpath = ["backend"]
