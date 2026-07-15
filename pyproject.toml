@@ -12,6 +12,9 @@
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+# The importable source root lives under backend/ (see [tool.pytest] pythonpath),
+# so Ruff's import sorter recognises `app` as first-party.
+src = ["backend"]
 
 [tool.ruff.lint]
 # A sensible, proportionate rule set — not maximalist. Deliberately excludes
@@ -39,6 +42,9 @@ indent-style = "space"
 python_version = "3.12"
 files = ["backend/app", "backend/tests"]
 mypy_path = "backend"
+# The Pydantic plugin gives accurate typing for models and settings (validated
+# field types, generated __init__ signatures).
+plugins = ["pydantic.mypy"]
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true

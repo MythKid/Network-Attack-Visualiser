@@ -1,0 +1,17 @@
+# Runtime dependencies for the Network Attack Visualiser backend.
+#
+# Pip-compatible and intentionally minimal — no Poetry/uv/Pipenv/Conda. Only
+# dependencies genuinely required by the current phase are listed. Exact pins on
+# these direct dependencies reduce unintended dependency drift; their transitive
+# dependencies are resolved by pip and are not locked here. Bump deliberately
+# (e.g. via a reviewed PR), not implicitly.
+#
+# Phase 1 (backend skeleton): the FastAPI application, the ASGI server and the
+# typed settings stack. Plain `uvicorn` (no [standard] extras) is sufficient to
+# serve the app; performance extras and WebSocket support are added in the
+# phases that need them.
+
+fastapi==0.139.0
+uvicorn==0.51.0
+pydantic==2.13.4
+pydantic-settings==2.14.2

@@ -16,7 +16,7 @@ This project is for **education, research and authorised laboratory environments
 
 ## Project Status
 
-**Design (Phase 0) and the tooling/CI baseline (Phase 0.5) are complete.** There is still **no application code yet** — the repository currently contains the full Version 1 design specification plus the quality and continuous-integration scaffolding (Ruff, mypy, Pytest, pre-commit and GitHub Actions). Development proceeds one approved phase at a time; the backend skeleton is Phase 1.
+**Phases 0, 0.5 and 1 are complete.** The Version 1 design specification (Phase 0), the quality and continuous-integration baseline (Phase 0.5) and the **backend skeleton** (Phase 1) are in place. The backend is a minimal, running FastAPI application with environment-driven typed configuration, a `GET /health` endpoint and interactive OpenAPI docs. Detection, ingest, storage, alerting, the dashboard and the optional AI layer are introduced in later approved phases — development proceeds one approved phase at a time.
 
 - Current progress: [docs/PROJECT_PROGRESS.md](docs/PROJECT_PROGRESS.md)
 - Phase plan and acceptance criteria: [docs/DEVELOPMENT_PHASES.md](docs/DEVELOPMENT_PHASES.md)
@@ -67,17 +67,35 @@ This project is for **education, research and authorised laboratory environments
 
 ## Development
 
-The repository ships with a lightweight, pip-compatible tooling baseline. Development tools are pinned in [requirements-dev.txt](requirements-dev.txt); their configuration lives in [pyproject.toml](pyproject.toml).
+The repository ships with a lightweight, pip-compatible tooling baseline. Runtime dependencies are pinned in [requirements.txt](requirements.txt) and development tools in [requirements-dev.txt](requirements-dev.txt); their configuration lives in [pyproject.toml](pyproject.toml).
 
 ```bash
 # From the repository root
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements-dev.txt
+pip install -r requirements.txt -r requirements-dev.txt
 
 # Optional: install the git pre-commit hook
 pre-commit install
 ```
+
+### Running the backend
+
+Run from the repository root so the root `.env` is loaded. Either invocation works:
+
+```bash
+uvicorn --app-dir backend app.main:app     # ASGI server
+PYTHONPATH=backend python -m app.main       # module entry point
+```
+
+Then:
+
+- Health check: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health) → `{"status": "ok", "version": "0.1.0"}`
+- Interactive API docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+
+Configuration is environment-driven with validated defaults; copy [.env.example](.env.example) to `.env` to override any value.
+
+### Quality checks
 
 Quality checks (all run in CI on Python 3.12 for every push and pull request):
 

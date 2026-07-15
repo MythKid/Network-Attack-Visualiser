@@ -18,8 +18,8 @@ Development proceeds **one approved phase at a time**. No phase begins without e
 | --- | --- | --- |
 | 0 | Design documentation | Complete |
 | 0.5 | Tooling and CI baseline | Complete |
-| 1 | Backend skeleton | Planned (next) |
-| 2 | Detection engine + synthetic events | Planned |
+| 1 | Backend skeleton | Complete |
+| 2 | Detection engine + synthetic events | Planned (next) |
 | 3 | Alert pipeline (storage, REST, WebSocket) | Planned |
 | 4 | Frontend dashboard | Planned |
 | 5 | PCAP replay + Scapy hardening | Planned |
@@ -198,4 +198,4 @@ Hardened deployment (reverse proxy, TLS, authenticated non-loopback exposure, se
 
 ## Recommended Next Phase
 
-**Phase 0.5 — Tooling and CI Baseline** (approved), which also resolves the licence decision.
+**Phase 2 — Detection Engine + Synthetic Events**: typed schemas (`PacketEvent`, `CandidateAlert`, `Alert`), the clock-injected detector interface, the `portscan` and `synflood` detectors, and a labelled synthetic event generator.

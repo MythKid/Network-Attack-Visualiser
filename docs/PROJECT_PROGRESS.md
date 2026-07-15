@@ -37,13 +37,24 @@ The quality and continuous-integration baseline is in place, and the licence dec
 - **`.github/workflows/ci.yml`** — Python 3.12, dependency caching, `ruff check` / `ruff format --check` / `mypy` / `pytest` / `pre-commit`, least-privilege `contents: read`, and **conditional** Compose validation (skips cleanly until a Compose file exists; mandatory from Phase 6).
 - **`LICENSE`** — MIT, Copyright (c) 2026 Methindu Damsara.
 
+### Phase 1 — Backend Skeleton (completed 2026-07-15)
+A minimal, running FastAPI backend is in place, with application creation, configuration, routing and response models kept cleanly separated:
+
+- **`backend/app/main.py`** — the `create_app(settings)` application factory (settings are injectable, so tests build isolated apps without touching global state), a module-level `app` for ASGI servers, and a `python -m app.main` development runner bound to the configured host/port.
+- **`backend/app/config.py`** — typed, environment-driven `Settings` (Pydantic Settings) with documented, validated defaults: `app_name`, `app_version` (defaults to the packaged `__version__`, overridable via `APP_VERSION`), `environment`, `host`, `port`. Empty/whitespace-only strings, out-of-range ports and unknown environments are rejected clearly. A cached `get_settings()` accessor is used only at application construction.
+- **`backend/app/api/`** — `GET /health` → `{"status": "ok", "version": <app version>}`, the typed `HealthResponse` model, and OpenAPI docs at `/docs`.
+- **Dependencies** — runtime deps pinned in `requirements.txt` (`fastapi`, `uvicorn`, `pydantic`, `pydantic-settings`); `httpx2` added to `requirements-dev.txt` for the FastAPI/Starlette `TestClient` (the current Starlette `TestClient` prefers `httpx2`). CI now installs runtime **and** dev dependencies, and the Pydantic mypy plugin is enabled.
+- **Tests** — deterministic unit tests for application creation, the health response and its typed schema, version propagation, OpenAPI/`/docs` availability, and configuration validation.
+- **`.env.example`** — documents the Phase 1 variables with non-secret defaults.
+- **Version** — package `__version__` bumped `0.0.0` → `0.1.0`.
+
 ---
 
 ## Current Phase
 
-**Phase 0.5 — Tooling and CI Baseline: complete.** Phase 0 (design documentation) is committed and pushed.
+**Phase 1 — Backend Skeleton: complete.** A minimal FastAPI application (factory, typed configuration, `GET /health`, OpenAPI docs) runs and is covered by deterministic tests; `ruff check`, `ruff format --check`, `mypy`, `pytest` and `pre-commit` all pass locally.
 
-No application code, application dependencies, containers or services exist yet. This is by design: development proceeds one approved phase at a time. The next approved unit of work is Phase 1 (backend skeleton).
+The detection engine, ingest paths, storage, alert pipeline, dashboard and AI layer do not exist yet. This is by design: development proceeds one approved phase at a time. The next planned unit of work is Phase 2 (detection engine + synthetic events).
 
 ---
 
@@ -52,8 +63,8 @@ No application code, application dependencies, containers or services exist yet.
 | Phase | Title | Status |
 | --- | --- | --- |
 | 0.5 | Tooling and CI baseline (Ruff, mypy, Pytest config, pre-commit, GitHub Actions); resolve licence | **Complete** |
-| 1 | Backend skeleton (FastAPI, health endpoint, config) | Planned (next) |
-| 2 | Detection engine + synthetic events | Planned |
+| 1 | Backend skeleton (FastAPI, health endpoint, config) | **Complete** |
+| 2 | Detection engine + synthetic events | Planned (next) |
 | 3 | Alert pipeline (SQLite storage, dedup/cooldown, REST, WebSocket) | Planned |
 | 4 | Frontend dashboard | Planned |
 | 5 | PCAP replay + Scapy hardening | Planned |
@@ -78,4 +89,4 @@ Acceptance criteria for each phase are in [DEVELOPMENT_PHASES.md](DEVELOPMENT_PH
 
 ## Next Milestone
 
-**Phase 1 — Backend Skeleton** (a minimal, running FastAPI application with configuration and a health endpoint). See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md). Not started; awaits explicit approval.
+**Phase 2 — Detection Engine + Synthetic Events** (typed schemas, the detector interface, both detectors, and a labelled synthetic event generator, all driven by an injected clock). See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md). Not started; awaits explicit approval.
