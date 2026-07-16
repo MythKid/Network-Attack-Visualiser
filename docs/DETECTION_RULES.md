@@ -1,6 +1,6 @@
 # Detection Rules
 
-**Document status:** Phase 0 design. Nothing described here is implemented yet; this document defines the agreed Version 1 detectors and alert lifecycle.
+**Document status:** Partially implemented. **Implemented in Phase 2:** the detector interface contract (§2), including the source-aware `expire(source_type, now)` contract; the event-time, out-of-order and too-late policy (§2.1); the `portscan` detector (§3); the `synflood` detector (§4); and the detector configuration variables (§8). The detector overlap policy (§6) is **already reflected at the `CandidateAlert` output level**: `DetectionEngine` returns the candidates of every detector independently, with no cross-detector deduplication. The scenario mapping (§7) is **already exercised in-process** through `DetectionEngine` against the synthetic scenarios (normal → no candidates; port scan → `portscan`; SYN burst → `synflood`). **Planned for Phase 3:** converting `CandidateAlert` objects into persisted `Alert` records, the Alert Engine lifecycle and its cooldown/deduplication gate (§5), and broadcasting alert updates; the `*_COOLDOWN_S` values in §8 are loaded and validated but not yet consumed by anything. See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) for current status.
 
 **Related documents:** [PROJECT_SCOPE.md](PROJECT_SCOPE.md), [ARCHITECTURE.md](ARCHITECTURE.md), [NETWORK_DESIGN.md](NETWORK_DESIGN.md), [ALERT_SCHEMA.md](ALERT_SCHEMA.md), [TESTING_STRATEGY.md](TESTING_STRATEGY.md).
 
@@ -26,18 +26,21 @@ class Detector(Protocol):
     def update(self, event: PacketEvent, now: float) -> list[CandidateAlert]:
         """Consume one event at logical time `now`; return zero or more CandidateAlerts."""
 
-    def expire(self, now: float) -> None:
-        """Prune per-key state whose window/TTL has elapsed as of `now`."""
+    def expire(self, source_type: SourceType, now: float) -> None:
+        """Prune `source_type` state whose window/TTL has elapsed as of `now`."""
 ```
+
+**Why `expire` names a `source_type`.** Detector state is partitioned by `source_type` (§2.1, §6) and **each partition runs on its own logical clock** — synthetic, replay and live timelines are unrelated and can diverge by years. A single global `expire(now)` therefore has no correct meaning: applied to every partition it would let one provenance's clock age out another's state (a live event would instantly expire a replay's evidence window), and ignoring `now` to avoid that would leave the parameter a lie. Naming the partition the supplied `now` belongs to is what lets the logical time actually be honoured **and** keeps provenances isolated. A detector advances and sweeps only the named partition; an unknown `source_type` is a no-op.
 
 Detectors return **`CandidateAlert`** objects, **not** the persisted `Alert` model. A `CandidateAlert` carries only detector-produced information (detector ID/version, category, severity, confidence, source/destination, evidence, `threshold_snapshot`, `source_type` and evidence-window times). The Alert Engine is what turns a `CandidateAlert` into a persisted `Alert`, assigning `alert_id`, `created_at`, `dedup_key`, `occurrence_count`, `last_seen`, the AI fields and the persistence lifecycle. The exact `CandidateAlert` fields are defined in [ALERT_SCHEMA.md](ALERT_SCHEMA.md) §2.0.
 
 Design rules and their rationale:
 
-- **Clock injected, never read.** Detectors receive `now` as a parameter and never call `time.time()`. This makes window, expiry and cooldown behaviour deterministic under test and guarantees that accelerated PCAP replay and live capture behave identically (see [TESTING_STRATEGY.md](TESTING_STRATEGY.md) and §2.1 below).
+- **Clock injected, never read.** Detectors receive `now` as a parameter and never call `time.time()`. This makes detector window and expiry behaviour deterministic under test, and because event timestamps are preserved end-to-end, accelerated PCAP replay and live processing produce equivalent detector results (see [TESTING_STRATEGY.md](TESTING_STRATEGY.md) and §2.1 below). Cooldown behaviour is not a detector concern: the Phase 3 Alert Engine must apply this same injected logical-time principle when it implements the cooldown gate (§5). An injected clock is only honest if it is actually honoured: `expire(source_type, now)` advances that partition's logical time to `now` rather than discarding it.
 - **Pure, no I/O.** Detectors do not touch the database, the network or the clock. They transform (event, state) into candidate alerts. Persistence and broadcasting are the Alert Engine's job.
 - **Per-key sliding windows.** Each detector keys events (see each spec) and maintains a bounded sliding window of recent timestamps/facts per key. **Every detector-state key includes `source_type`** so synthetic, replay and live traffic can never share an evidence window (§6, [ARCHITECTURE.md](ARCHITECTURE.md)).
-- **Periodic state sweep.** The engine calls `expire(now)` regularly so idle keys free their state after a configured TTL, bounding memory.
+- **Periodic state sweep.** The engine calls `expire(event.source_type, now)` regularly so idle keys free their state after a configured TTL, bounding memory.
+- **No state without cause.** A packet a detector cannot act on must leave **no trace**: it may not create a state key, window entry or pending entry, and may not refresh an existing key's idle TTL. Otherwise ignored traffic would both leak memory and keep dead keys alive forever, defeating the sweep above. Each detector therefore classifies a packet and applies its **packet-specific age gate before** touching any state, and refreshes a key's last-activity time only when the packet actually creates, progresses, completes or removes state (advancing it to `max(existing, event.ts)`, so an out-of-order packet never rewinds it).
 
 The candidate alerts a detector returns are passed to the Alert Engine, which applies the cooldown/deduplication gate in Section 5 before anything is stored or broadcast.
 
@@ -48,7 +51,7 @@ Detector windows operate on **one canonical logical event time** — the `now` p
 - **PCAP replay** (Phase 5): `ts` is the **packet's capture timestamp preserved from the PCAP**. Replay may *accelerate wall-clock delivery* (shortening or removing the real-time sleeps between packets), but it **must not** compress the detection windows or alter which alerts fire: detectors only ever see the preserved capture timestamps, so an accelerated replay and a real-time replay of the same PCAP produce **identical** alerts. See [NETWORK_DESIGN.md](NETWORK_DESIGN.md) §11.
 - **Live** (Phase 6): `ts` is the sensor's capture time.
 
-**Monotonic logical time for expiry.** The engine advances a per-source-type logical high-water mark equal to the greatest `ts` seen and drives `expire(now)` from it, so logical time never runs backwards even when packets arrive slightly out of order.
+**Monotonic logical time for expiry.** The engine advances a per-source-type logical high-water mark equal to the greatest `ts` seen and drives `expire(event.source_type, now)` from it, so logical time never runs backwards even when packets arrive slightly out of order — and so each provenance is only ever swept against its own timeline.
 
 **Out-of-order and unreasonable timestamps.**
 - *Mild reordering* (an event whose `ts` is at or after the current window start but below the high-water mark) is still placed in its correct window by timestamp; it does not rewind the high-water mark, so it cannot prematurely trigger `expire`.
@@ -97,7 +100,7 @@ Configuration validation: `PORTSCAN_CRITICAL_PORTS` must be greater than `2 × P
 
 **Evidence fields** (stored on the alert; see [ALERT_SCHEMA.md](ALERT_SCHEMA.md)): `distinct_port_count`, `sampled_ports` (a representative sample, capped at ≤ 20), `syn_count`, `window_start`, `window_end`, `duration_s`.
 
-**State expiry.** A `(source_type, src_ip, dst_ip)` key with no new SYN for `PORTSCAN_STATE_TTL_S` is dropped by `expire(now)`.
+**State expiry.** A `(source_type, src_ip, dst_ip)` key with no new SYN for `PORTSCAN_STATE_TTL_S` is dropped by `expire(source_type, now)`.
 
 **False positives.**
 - Monitoring / health-check systems that probe many ports.
@@ -132,11 +135,11 @@ For traffic involving the key host:
 
 | Packet (relative to key host) | Rule |
 | --- | --- |
-| **SYN** (`SYN=1, ACK=0`) toward key host | If **no** pending entry exists for the 4-tuple, create one with `syn_observed = True`, record `syn_ts`, register the SYN in the window cohort (this is what increments `syn_count`), and set state `SYN_SEEN`. If a pending entry **already** exists with `syn_observed == True`, this is a **retransmitted SYN** → refresh only; do **not** double-count. If a pending entry exists with `syn_observed == False` (it was born from an orphan SYN-ACK), now that a real SYN is observed, set `syn_observed = True`, record `syn_ts`, and register it in the cohort (so it *becomes* eligible for the numerator/denominator). |
-| **SYN-ACK** (`SYN=1, ACK=1`) from key host, matching the reversed 4-tuple | Increment `synack_count`. If a pending entry exists, move it to `SYN_ACK_SEEN`, leaving `syn_observed` unchanged. If **no** pending entry exists (the SYN was missed), create the entry in `SYN_ACK_SEEN` with `syn_observed = False` and **do not** register it in the cohort — `syn_count` is untouched. |
-| **Final ACK** (`ACK=1, SYN=0, RST=0, FIN=0`) toward key host, matching a pending entry | Remove the entry. Count one `completed_handshake` **only if `syn_observed == True`**, attributing the completion to that entry's `syn_ts` cohort (so the numerator can never reference an attempt absent from the denominator). If `syn_observed == False` (orphan SYN-ACK origin), remove the entry **without** counting any completion — it was never in the denominator, so it must never enter the numerator. This still tolerates a lost/out-of-order SYN-ACK **as long as the SYN itself was observed**. |
-| **ACK** with no matching pending entry | Ignore (established-flow traffic). |
-| **RST** from key host matching an entry | Remove the entry **without** counting a completion. |
+| **SYN** (`SYN=1, ACK=0`) toward key host | **Age gate:** if `ts < now − SYN_WINDOW_S` the SYN can never join a cohort → ignore it entirely, creating **no** key, pending entry or cohort attempt. Otherwise: if **no** pending entry exists for the 4-tuple, create one with `syn_observed = True`, record `syn_ts`, register the SYN in the window cohort (this is what increments `syn_count`), and set state `SYN_SEEN`. If a pending entry **already** exists with `syn_observed == True`, this is a **retransmitted SYN** → refresh only; do **not** double-count. If a pending entry exists with `syn_observed == False` (it was born from an orphan SYN-ACK), now that a real SYN is observed, set `syn_observed = True`, record `syn_ts`, and register it in the cohort (so it *becomes* eligible for the numerator/denominator). |
+| **SYN-ACK** (`SYN=1, ACK=1`) from key host, matching the reversed 4-tuple | **Age gate:** if `ts < now − HANDSHAKE_TTL_S` the handshake is already dead → ignore entirely, creating no key or pending entry. Otherwise **progression and evidence are accounted separately** (see §4.2): add `ts` to the `synack_count` evidence window **only if** `ts ≥ now − SYN_WINDOW_S`, so `synack_count` and the SYN cohort always describe the *same* window; an older-but-still-matchable SYN-ACK may progress state without becoming evidence. Then, if a pending entry exists, move it to `SYN_ACK_SEEN`, leaving `syn_observed` unchanged. If **no** pending entry exists (the SYN was missed), create the entry in `SYN_ACK_SEEN` with `syn_observed = False` and **do not** register it in the cohort — `syn_count` is untouched. |
+| **Final ACK** (`ACK=1, SYN=0, RST=0, FIN=0`) toward key host, matching a pending entry | **Age gate:** if `ts < now − HANDSHAKE_TTL_S`, ignore entirely. Otherwise remove the entry. Count one `completed_handshake` **only if `syn_observed == True`**, attributing the completion to that entry's `syn_ts` cohort (so the numerator can never reference an attempt absent from the denominator). If `syn_observed == False` (orphan SYN-ACK origin), remove the entry **without** counting any completion — it was never in the denominator, so it must never enter the numerator. This still tolerates a lost/out-of-order SYN-ACK **as long as the SYN itself was observed**. |
+| **ACK** with no matching pending entry | Ignore (established-flow traffic): create **no** key state and do **not** refresh the key's idle TTL. |
+| **RST** from key host matching an entry | **Age gate:** if `ts < now − HANDSHAKE_TTL_S`, ignore entirely. Otherwise remove the entry **without** counting a completion. An RST matching **no** pending entry is ignored and, like a bare ACK, creates no key state and does not refresh the TTL. |
 | Pending entry with no progress for `HANDSHAKE_TTL_S` | Expire it (deemed a half-open / incomplete handshake). Expiry never adds a completion. |
 
 This is an *approximate* state machine, not a full TCP implementation; the approximations (retransmission de-duplication, observed-SYN-gated completion, out-of-order final ACK) are chosen to be robust to normal packet loss and reordering in the lab **while keeping the completion ratio well-formed**.
@@ -146,6 +149,7 @@ The denominator and numerator must refer to **the same cohort of attempts**. The
 
 - `syn_count` = number of cohort attempts (entries registered by an observed SYN whose `syn_ts` is in-window). Retransmissions and orphan SYN-ACKs are excluded by §4.1.
 - `completed_handshakes` = number of **those same** cohort attempts (`syn_ts` in-window, `syn_observed == True`) that reached a final ACK. A completion is attributed to its attempt's `syn_ts`, so it enters the numerator **only while** its SYN remains in-window.
+- `synack_count` = SYN-ACKs whose `ts` lies in the **same** `SYN_WINDOW_S` window. This is why §4.1 gates SYN-ACK *evidence* on `SYN_WINDOW_S` while allowing *progression* for the longer `HANDSHAKE_TTL_S`: the two horizons answer different questions. `HANDSHAKE_TTL_S` asks "could this packet still belong to a handshake we are tracking?"; `SYN_WINDOW_S` asks "does this packet describe the burst we are reporting?". Conflating them would let a SYN-ACK from outside the reported window inflate the evidence of a burst it was never part of.
 
 ```
 completion_ratio = completed_handshakes / syn_count      (undefined, and no trigger, when syn_count == 0)
@@ -184,7 +188,7 @@ Severity is evaluated from the most severe band downward (critical, then high, t
 
 **Evidence fields:** `syn_count`, `synack_count`, `completed_handshakes`, `completion_ratio`, `distinct_src_count`, `syn_rate_per_s`, `window_start`, `window_end`.
 
-**State expiry.** Pending entries expire after `HANDSHAKE_TTL_S`; a key host idle for `SYN_STATE_TTL_S` is dropped entirely.
+**State expiry.** Pending entries expire after `HANDSHAKE_TTL_S`; a key host idle for `SYN_STATE_TTL_S` is dropped entirely. "Idle" means no packet that *affected* this key's state: per §2, traffic the detector ignores (an out-of-window SYN, an age-gated handshake packet, a bare ACK or an unmatched RST) does not count as activity and cannot hold a dead key open.
 
 **False positives.**
 - Legitimate traffic bursts (flash crowds).
@@ -265,5 +269,7 @@ All values are initial laboratory defaults and are configurable via environment 
 | `HANDSHAKE_TTL_S` | `10` | synflood | Pending-entry (half-open) expiry (s). |
 | `SYN_STATE_TTL_S` | `30` | synflood | Idle-key state expiry (s). |
 | `SYN_COOLDOWN_S` | `60` | synflood | Alert cooldown (s). |
+
+**Validation.** Configuration is untrusted input. Every window, TTL, cooldown and ratio above must be **finite and positive**: `NaN` and `±Infinity` are rejected on load, never clamped or accepted. This is not pedantry — `float("inf")` parses happily from an environment variable, and an infinite window or TTL would silently disable expiry (state would grow without bound), while `NaN` makes every window comparison false and would silently disable detection itself. A detection engine that fails loudly at startup is strictly better than one that quietly stops detecting. The same rule applies to the engine's derived acceptance horizon (§2.1).
 
 Every alert stores a `threshold_snapshot` of the values active when it fired, so an alert remains interpretable even if configuration changes later (see [ALERT_SCHEMA.md](ALERT_SCHEMA.md)).

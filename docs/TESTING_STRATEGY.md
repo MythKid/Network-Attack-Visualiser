@@ -1,6 +1,6 @@
 # Testing Strategy
 
-**Document status:** Phase 0 design. Nothing described here is implemented yet; this document defines the agreed Version 1 testing approach.
+**Document status:** Partially implemented. The testing philosophy (§1), the deterministic clock-injection harness (§2) and the Phase 2 unit-test coverage (§3 — schema and configuration validation, detector threshold boundaries, the SYN handshake state machine, state-creation gates, window/expiry mechanics and cross-`source_type` isolation), together with the synthetic-event and detection-engine tests, are **implemented**. Everything mapped to a later phase in §13 remains **planned**: the cooldown/deduplication tests (§4), the malformed-packet corpus and replay end-to-end (§5, §8), integration and WebSocket tests (§6, §7), frontend tests (§9), Docker verification (§10), AI-layer tests (§11) and the coverage gate (§12). See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) for current status.
 
 **Related documents:** [ARCHITECTURE.md](ARCHITECTURE.md), [DETECTION_RULES.md](DETECTION_RULES.md), [ALERT_SCHEMA.md](ALERT_SCHEMA.md), [NETWORK_DESIGN.md](NETWORK_DESIGN.md), [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md), [AI_EXPLANATION_DESIGN.md](AI_EXPLANATION_DESIGN.md).
 
@@ -19,11 +19,13 @@ The framework is **Pytest** for the backend and **Vitest + React Testing Library
 
 ## 2. Deterministic Clock Injection (foundational)
 
-Detectors never call `time.time()`. `update(event, now)` and `expire(now)` receive **one canonical logical event time** derived from `PacketEvent.ts` (see [DETECTION_RULES.md](DETECTION_RULES.md) §2.1). Tests use a `FakeClock` that advances by exact amounts to cross window, TTL and cooldown boundaries:
+Detectors never call `time.time()`. `update(event, now)` and `expire(source_type, now)` receive **one canonical logical event time** derived from `PacketEvent.ts` (see [DETECTION_RULES.md](DETECTION_RULES.md) §2.1). `expire` names the `source_type` its `now` belongs to because each provenance partition runs on its own logical clock; tests can therefore drive one partition's expiry directly and assert that the others do not move. Tests use a `FakeClock` that advances by exact amounts to cross time boundaries. The Phase 2 tests use this deterministic clock harness for the sliding-window and TTL boundaries; Phase 3 will reuse the **same** harness for cooldown boundaries:
 
-- Cross a sliding-window edge to prove old events fall out of the window.
-- Cross a state-TTL boundary to prove idle keys are pruned by `expire`.
-- Cross a cooldown boundary to prove the update-vs-new-row transition (Section 4).
+- Cross a sliding-window edge to prove old events fall out of the window (Phase 2).
+- Cross a state-TTL boundary to prove idle keys are pruned by `expire` (Phase 2).
+- Cross a cooldown boundary to prove the update-vs-new-row transition (Section 4) — **Phase 3**, with the Alert Engine that owns cooldown timing.
+
+An injected clock must be **tested as injected**: `expire(source_type, now)` is exercised **directly** (not only via `update`) at the exact TTL boundary and just beyond it, which is what proves the supplied logical time is honoured rather than quietly ignored in favour of internal state.
 
 **Event-time semantics** ([DETECTION_RULES.md](DETECTION_RULES.md) §2.1):
 - Feeding events whose `ts` is preserved (not wall-clock) proves accelerated PCAP replay and live capture produce **identical** detector behaviour — the same alerts fire regardless of replay speed.
@@ -38,6 +40,11 @@ Detectors never call `time.time()`. `update(event, now)` and `expire(now)` recei
 - Valid `PacketEvent` accepted; invalid enum values, out-of-range ports, and missing required fields rejected.
 - `CandidateAlert` construction validates severity enum and the confidence range (0–0.95) and carries **no** identity/dedup/AI fields (those belong to `Alert`).
 - `Alert` construction validates severity/`ai_status` enums and the confidence range (0–0.95).
+- **Non-finite JSON rejected recursively:** `NaN` and `±Infinity` in `evidence` or `threshold_snapshot` are rejected on **both** `CandidateAlert` and `Alert`, at the top level and inside nested dictionaries and lists. This is tested explicitly because the permissive default is silent: Pydantic's `JsonValue` accepts non-finite floats and serialises them to `null`, destroying the evidence instead of refusing it.
+
+**Configuration validation** ([DETECTION_RULES.md](DETECTION_RULES.md) §8):
+- Non-finite windows, TTLs, cooldowns and ratios are rejected in `PortScanConfig`, `SynFloodConfig` and `DetectionSettings` — including from environment variables, since `float()` parses `"inf"` and `"nan"` happily.
+- The `DetectionEngine` rejects a non-finite `max_window_s` and a non-finite detector-derived `max_event_age_s`.
 
 **Detector threshold boundaries** ([DETECTION_RULES.md](DETECTION_RULES.md)):
 - `portscan`: `PORTSCAN_MIN_PORTS − 1` distinct ports → no alert; `PORTSCAN_MIN_PORTS` → alert. Severity band boundaries (medium/high/critical at 15/30/100 with defaults) verified.
@@ -51,17 +58,25 @@ Detectors never call `time.time()`. `update(event, now)` and `expire(now)` recei
 - **Ratio bounds:** across mixed sequences (orphans, retransmissions, completions), `0.0 ≤ completion_ratio ≤ 1.0` always holds and `completed_handshakes ≤ syn_count`.
 - **Window expiry of the cohort:** once an attempt's observed SYN ages out of `SYN_WINDOW_S`, it leaves both numerator and denominator together, and a pending entry with no progress expires after `HANDSHAKE_TTL_S` without adding a completion.
 - Bare ACK with no pending entry is ignored; RST removes an entry without a completion.
+- **SYN-ACK progression vs evidence:** a SYN-ACK inside `HANDSHAKE_TTL_S` but outside `SYN_WINDOW_S` may progress pending state, yet leaves `synack_count` unchanged and never appears in candidate evidence (§4.2).
 - **Cross-`source_type` isolation:** interleaving `synthetic` and `live` SYNs for the same `dst_ip` keeps two independent cohorts and never merges counts (§6).
+
+**No state without cause** ([DETECTION_RULES.md](DETECTION_RULES.md) §2). Each of these must leave the detector with **no** key state, and must not refresh an existing key's idle TTL — otherwise ignored traffic leaks memory and keeps dead keys alive:
+- A SYN older than `SYN_WINDOW_S` creates no key, pending entry or cohort attempt.
+- A SYN-ACK / final ACK / RST older than `HANDSHAKE_TTL_S` creates no key or pending entry.
+- A bare ACK creates no target key.
+- An unmatched RST creates no target key.
 
 **Window / expiry mechanics:**
 - Events sliding out of the window stop contributing.
-- `expire(now)` frees idle-key state after the configured TTL.
+- `expire(source_type, now)` frees idle-key state in **that** partition after the configured TTL: state is retained at the exact TTL boundary and removed just beyond it.
+- Expiring one `source_type` neither advances nor removes another's state — proven in both directions (`live` must not expire `synthetic`, and vice versa).
 
-**Cooldown semantics** (Section 4).
+**Cooldown semantics** (Section 4) — Phase 3, with the Alert Engine that owns cooldown timing.
 
 ---
 
-## 4. Cooldown / Deduplication Tests
+## 4. Cooldown / Deduplication Tests (Phase 3)
 
 Directly exercise the update-vs-new-row behaviour from [DETECTION_RULES.md](DETECTION_RULES.md):
 
@@ -163,7 +178,8 @@ All using a **mock provider** — no live network:
 
 | Test category | Introduced in |
 | --- | --- |
-| Clock-injection harness, schema and detector unit tests, cooldown tests | Phase 2 |
+| Clock-injection harness, schema, configuration, detection-engine and detector unit tests | Phase 2 |
+| Alert lifecycle, cooldown and deduplication tests | Phase 3 |
 | Integration and WebSocket tests | Phase 3 |
 | Frontend component tests | Phase 4 |
 | Malformed-packet corpus, replay e2e | Phase 5 |

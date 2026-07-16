@@ -1,6 +1,6 @@
 # Network Design
 
-**Document status:** Phase 0 design. Nothing described here is implemented yet; this document defines the agreed Version 1 network and capture architecture.
+**Document status:** Design, with the environment verified and the first ingestion stage implemented. **The network lab and packet-capture architecture described here are not implemented.** What exists today: the agreed development environment (§1) — Docker Desktop with WSL 2 integration on Ubuntu-26.04 — has been verified; and stage 1 of the ingestion progression in §11, the **in-process synthetic events** of Phase 2, is implemented (it involves no network, no bridge and no capture). **Planned for Phases 5 and 6:** the Docker lab topology (§2), the port publication model (§3), bridge capture mechanics and capture visibility (§4–§7), self-capture filtering (§8), PCAP replay (§11 stage 2) and live capture (§11 stage 3). See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) for current status.
 
 **Related documents:** [PROJECT_SCOPE.md](PROJECT_SCOPE.md), [ARCHITECTURE.md](ARCHITECTURE.md), [DETECTION_RULES.md](DETECTION_RULES.md), [ALERT_SCHEMA.md](ALERT_SCHEMA.md), [SECURITY_REQUIREMENTS.md](SECURITY_REQUIREMENTS.md), [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md).
 

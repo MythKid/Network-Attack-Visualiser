@@ -1,6 +1,6 @@
 # Architecture
 
-**Document status:** Phase 0 design. Nothing described here is implemented yet; this document defines the agreed Version 1 architecture.
+**Document status:** Partially implemented; this document defines the agreed Version 1 architecture in full. **Implemented through Phase 2:** the FastAPI application, configuration and health foundation; the typed domain models; the deterministic synthetic ingest source; the `DetectionEngine`; and the `portscan` and `synflood` detectors. **Planned:** the Alert Engine; SQLite storage; the alert, statistics and ingest REST APIs; the WebSocket broadcaster; the frontend; the Docker lab; PCAP replay; live capture; and the AI explanation layer. The component responsibilities (§2), repository structure (§3) and data flow (§4) therefore describe the agreed target architecture, of which the detection path is built and the pipeline beyond it is not. See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) for current status.
 
 **Related documents:** [PROJECT_SCOPE.md](PROJECT_SCOPE.md), [NETWORK_DESIGN.md](NETWORK_DESIGN.md), [DETECTION_RULES.md](DETECTION_RULES.md), [ALERT_SCHEMA.md](ALERT_SCHEMA.md), [SECURITY_REQUIREMENTS.md](SECURITY_REQUIREMENTS.md), [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md), [TESTING_STRATEGY.md](TESTING_STRATEGY.md), [AI_EXPLANATION_DESIGN.md](AI_EXPLANATION_DESIGN.md).
 

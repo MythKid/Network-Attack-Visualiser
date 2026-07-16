@@ -1,6 +1,6 @@
 # Project Scope
 
-**Document status:** Phase 0 design. Nothing described here is implemented yet; this document defines the agreed Version 1 (V1) scope before any application code is written.
+**Document status:** Partially implemented; this document defines the agreed Version 1 (V1) scope in full. **Implemented through Phase 2:** the FastAPI backend skeleton (application factory, typed configuration, health endpoint); the typed `PacketEvent`, `CandidateAlert` and `Alert` models with their typed evidence models; the `Detector` interface and the `DetectionEngine`; the `portscan` and `synflood` detectors; configurable detector windows and TTLs; and the deterministic synthetic event scenarios (stage 1 of the ingestion progression in §4). **Planned for later phases:** the alert lifecycle, deduplication and cooldown handling; SQLite persistence and event statistics; the REST ingest and alert APIs; WebSocket broadcasting; the frontend dashboard; PCAP replay; live capture and the Docker lab topology; and AI explanations. See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) for current status.
 
 **Related documents:** [ARCHITECTURE.md](ARCHITECTURE.md), [NETWORK_DESIGN.md](NETWORK_DESIGN.md), [DETECTION_RULES.md](DETECTION_RULES.md), [ALERT_SCHEMA.md](ALERT_SCHEMA.md), [SECURITY_REQUIREMENTS.md](SECURITY_REQUIREMENTS.md), [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md), [TESTING_STRATEGY.md](TESTING_STRATEGY.md), [AI_EXPLANATION_DESIGN.md](AI_EXPLANATION_DESIGN.md), [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md).
 

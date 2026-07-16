@@ -16,7 +16,7 @@ This project is for **education, research and authorised laboratory environments
 
 ## Project Status
 
-**Phases 0, 0.5 and 1 are complete.** The Version 1 design specification (Phase 0), the quality and continuous-integration baseline (Phase 0.5) and the **backend skeleton** (Phase 1) are in place. The backend is a minimal, running FastAPI application with environment-driven typed configuration, a `GET /health` endpoint and interactive OpenAPI docs. Detection, ingest, storage, alerting, the dashboard and the optional AI layer are introduced in later approved phases — development proceeds one approved phase at a time.
+**Phases 0, 0.5, 1 and 2 are complete.** The Version 1 design specification (Phase 0), the quality and continuous-integration baseline (Phase 0.5), the **backend skeleton** (Phase 1) and the **detection engine + synthetic events** (Phase 2) are in place. The backend is a running FastAPI application with environment-driven typed configuration, a `GET /health` endpoint and interactive OpenAPI docs; alongside it are the typed domain schemas, the clock-injected `portscan` and `synflood` detectors, and a deterministic synthetic event generator, all covered by an extensive unit-test suite. Storage, the alert pipeline, the dashboard and the optional AI layer are introduced in later phases — development proceeds one approved phase at a time.
 
 - Current progress: [docs/PROJECT_PROGRESS.md](docs/PROJECT_PROGRESS.md)
 - Phase plan and acceptance criteria: [docs/DEVELOPMENT_PHASES.md](docs/DEVELOPMENT_PHASES.md)
@@ -90,7 +90,7 @@ PYTHONPATH=backend python -m app.main       # module entry point
 
 Then:
 
-- Health check: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health) → `{"status": "ok", "version": "0.1.0"}`
+- Health check: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health) → `{"status": "ok", "version": "0.2.0"}`
 - Interactive API docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
 Configuration is environment-driven with validated defaults; copy [.env.example](.env.example) to `.env` to override any value.

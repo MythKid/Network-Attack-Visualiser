@@ -1,6 +1,6 @@
 # Alert and Event Schemas
 
-**Document status:** Phase 0 design. Nothing described here is implemented yet; this document defines the agreed Version 1 data model.
+**Document status:** Partially implemented. `PacketEvent` (§1), `CandidateAlert` (§2.0) and the `Alert` **model shape** (§2, including the evidence contents in §2.1) are **implemented in Phase 2**. Everything to do with persisting and maintaining an alert is **planned for Phase 3+**: the SQLite tables and DDL (§4), the `event_stats` aggregation (§3), the WebSocket envelope (§5), the retention/pruning rules (§6.1), and the `Alert` lifecycle fields the Alert Engine populates (`alert_id`, `created_at`, `dedup_key`, `occurrence_count`, `last_seen`) — the `Alert` model is defined but never constructed by Phase 2 code. The AI fields (`ai_explanation`, `ai_status`) are defined but remain inert until Phase 7. See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) for current status.
 
 **Related documents:** [ARCHITECTURE.md](ARCHITECTURE.md), [DETECTION_RULES.md](DETECTION_RULES.md), [NETWORK_DESIGN.md](NETWORK_DESIGN.md), [SECURITY_REQUIREMENTS.md](SECURITY_REQUIREMENTS.md), [AI_EXPLANATION_DESIGN.md](AI_EXPLANATION_DESIGN.md).
 
@@ -87,6 +87,8 @@ An `Alert` is produced from a detector's `CandidateAlert` (§2.0) and finalised 
 - **synflood:** `syn_count`, `synack_count`, `completed_handshakes`, `completion_ratio`, `distinct_src_count`, `syn_rate_per_s`, `window_start`, `window_end`.
 
 `threshold_snapshot` records the relevant thresholds (for example `PORTSCAN_MIN_PORTS`, `PORTSCAN_WINDOW_S`) so the alert remains fully interpretable even if configuration changes later.
+
+**Finite JSON only.** `evidence` and `threshold_snapshot` accept strictly JSON-serialisable content that is **free of non-finite numbers at every nesting depth** — `NaN` and `±Infinity` are rejected on both `CandidateAlert` and `Alert`, not coerced. JSON has no representation for them, so the permissive behaviour is to serialise them to `null`: an alert would appear well-formed while its evidence had silently become nothing. For a record whose purpose is to remain interpretable after the fact, refusing the value is the only honest option.
 
 ---
 

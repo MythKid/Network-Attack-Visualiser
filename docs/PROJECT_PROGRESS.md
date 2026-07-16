@@ -1,6 +1,6 @@
 # Project Progress
 
-**Last updated:** 2026-07-15
+**Last updated:** 2026-07-16
 
 This file tracks delivery progress. It is updated at the end of every completed phase.
 
@@ -48,13 +48,31 @@ A minimal, running FastAPI backend is in place, with application creation, confi
 - **`.env.example`** — documents the Phase 1 variables with non-secret defaults.
 - **Version** — package `__version__` bumped `0.0.0` → `0.1.0`.
 
+### Phase 2 — Detection Engine + Synthetic Events (completed 2026-07-16)
+The first correctness-critical logic is in place: typed domain schemas, the clock-injected detector interface, both heuristic detectors, and a deterministic synthetic event generator. Everything is pure and driven by canonical logical event time — no real clock is read in the detection path — and covered by an extensive deterministic test suite.
+
+- **`backend/app/models/`** — the Phase 2 data model (see [ALERT_SCHEMA.md](ALERT_SCHEMA.md)): `PacketEvent` (source-agnostic, metadata-only transport DTO; nullable ports/flags preserved for incomplete parsing), `CandidateAlert` (detector output with typed `PortScanEvidence` / `SynFloodEvidence`, and **no** identity/dedup/AI fields), and the persisted-shape `Alert` (defined, not populated). Shared validators enforce UUIDv4 identities, IP-address strings, finite/ordered timestamps and JSON-only evidence values.
+- **`backend/app/detection/`** — the `Detector` protocol (`update`/`expire` from [DETECTION_RULES.md](DETECTION_RULES.md) §2, plus an additive `max_event_age_s` the engine uses to derive its acceptance horizon); the `DetectionEngine`, which advances a **per-`source_type`** monotonic high-water mark from `PacketEvent.ts`, applies the out-of-order / too-late policy, and drives expiry; and the `portscan` and `synflood` detectors. State is nested by `source_type` (strict cross-provenance isolation even under widely divergent timelines); windows are safe against out-of-order insertion; emission is severity-aware and re-armable; and the SYN detector uses observed-SYN-gated completion accounting with stable per-attempt identity so `0.0 ≤ completion_ratio ≤ 1.0` always holds. Thresholds come from `DetectionSettings` (the **11** documented environment variables).
+- **`backend/app/ingest/synthetic.py`** — deterministic, `source_type="synthetic"` normal / port-scan / SYN-burst sequences, with collision-free event ids from an injective scenario-and-counter UUIDv4 factory.
+- **Tests** — 265 deterministic tests (schema validation, config, engine event-time policy, threshold and severity boundaries, sliding-window and TTL boundaries, the full SYN handshake state machine including orphan-SYN-ACK and reversed-tuple direction handling, state-creation gates, source-aware expiry, non-finite rejection, cross-source isolation, and synthetic labelling/determinism). `ruff`, `ruff format`, `mypy`, `pytest` and `pre-commit` all pass.
+- **Dependencies** — none added; detection uses only Pydantic (already pinned) and the standard library.
+- **Version** — package `__version__` bumped `0.1.0` → `0.2.0`, marking the completed Phase 2 detection functionality. `GET /health` and the OpenAPI schema report `0.2.0`; `.env.example` documents the matching `APP_VERSION` default, and the version continues to be derived from `__version__` rather than duplicated in code.
+- **Out of scope (deferred to Phase 3+)** — the Alert Engine, deduplication/cooldown, SQLite storage, REST/WebSocket ingest and the AI layer.
+
+**Pre-commit correction pass (2026-07-16).** A final independent review found correctness gaps that the original 133 tests did not cover. All were fixed during the Phase 2 pre-commit correction pass, and each is now covered by direct regression tests:
+
+- **SYN-flood mutation ordering.** Packets are now classified and age-gated **before** any state is created: an out-of-window SYN, an age-gated SYN-ACK/ACK/RST, a bare ACK and an unmatched RST previously each materialised an empty target key and refreshed its idle TTL, so ignored traffic could both leak memory and hold dead keys open indefinitely. A key's last-activity time now advances only when a packet actually creates, progresses, completes or removes state.
+- **SYN-ACK evidence window.** SYN-ACK *progression* (`HANDSHAKE_TTL_S`) is now separated from *evidence accounting* (`SYN_WINDOW_S`), so a SYN-ACK from outside the reported window can no longer inflate `synack_count` for a burst it was never part of.
+- **Expiry interface.** `expire(now)` ignored the logical time it was given (sweeping every partition against its own high-water mark) because a single global `now` could not be applied without one provenance's clock ageing out another's state. The contract is now `expire(source_type, now)`: the supplied time is genuinely honoured, for exactly one partition. This is a deliberate, documented change to the `Detector` protocol in [DETECTION_RULES.md](DETECTION_RULES.md) §2 and [TESTING_STRATEGY.md](TESTING_STRATEGY.md) §2.
+- **Non-finite values rejected.** Pydantic's `JsonValue` accepted `NaN`/`±Infinity` and serialised them to `null`, silently destroying evidence; they are now rejected recursively at any nesting depth in `evidence` and `threshold_snapshot` on both `CandidateAlert` and `Alert`. Detection configuration and the engine's acceptance horizons likewise reject non-finite values, which `float()` would otherwise parse straight out of an environment variable — an infinite window disables expiry, and `NaN` disables detection, both silently.
+
 ---
 
 ## Current Phase
 
-**Phase 1 — Backend Skeleton: complete.** A minimal FastAPI application (factory, typed configuration, `GET /health`, OpenAPI docs) runs and is covered by deterministic tests; `ruff check`, `ruff format --check`, `mypy`, `pytest` and `pre-commit` all pass locally.
+**Phase 2 — Detection Engine + Synthetic Events: complete** (application version `0.2.0`). The typed domain schemas, the clock-injected detector interface, the `portscan` and `synflood` detectors, and a deterministic labelled synthetic generator are in place and fully unit-tested (265 tests, including the post-review correction pass above). Detectors are pure and driven by canonical logical event time; `ruff check`, `ruff format --check`, `mypy`, `pytest` and `pre-commit` all pass locally.
 
-The detection engine, ingest paths, storage, alert pipeline, dashboard and AI layer do not exist yet. This is by design: development proceeds one approved phase at a time. The next planned unit of work is Phase 2 (detection engine + synthetic events).
+Storage, the Alert Engine (deduplication/cooldown), the REST/WebSocket API, the dashboard and the AI layer do not exist yet. This is by design: development proceeds one approved phase at a time. The next planned unit of work is Phase 3 (alert pipeline — storage, dedup/cooldown, REST, WebSocket).
 
 ---
 
@@ -64,8 +82,8 @@ The detection engine, ingest paths, storage, alert pipeline, dashboard and AI la
 | --- | --- | --- |
 | 0.5 | Tooling and CI baseline (Ruff, mypy, Pytest config, pre-commit, GitHub Actions); resolve licence | **Complete** |
 | 1 | Backend skeleton (FastAPI, health endpoint, config) | **Complete** |
-| 2 | Detection engine + synthetic events | Planned (next) |
-| 3 | Alert pipeline (SQLite storage, dedup/cooldown, REST, WebSocket) | Planned |
+| 2 | Detection engine + synthetic events | **Complete** |
+| 3 | Alert pipeline (SQLite storage, dedup/cooldown, REST, WebSocket) | Planned (next) |
 | 4 | Frontend dashboard | Planned |
 | 5 | PCAP replay + Scapy hardening | Planned |
 | 6 | Docker lab + live sidecar capture | Planned |
@@ -89,4 +107,4 @@ Acceptance criteria for each phase are in [DEVELOPMENT_PHASES.md](DEVELOPMENT_PH
 
 ## Next Milestone
 
-**Phase 2 — Detection Engine + Synthetic Events** (typed schemas, the detector interface, both detectors, and a labelled synthetic event generator, all driven by an injected clock). See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md). Not started; awaits explicit approval.
+**Phase 3 — Alert Pipeline (Storage, REST, WebSocket)** (SQLite persistence, the cooldown/deduplication gate that turns `CandidateAlert` objects into persisted `Alert` rows, REST endpoints, the authenticated ingest endpoint, and live WebSocket deltas). See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md). Not started; awaits explicit approval.

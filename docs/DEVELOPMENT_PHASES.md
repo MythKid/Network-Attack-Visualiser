@@ -19,8 +19,8 @@ Development proceeds **one approved phase at a time**. No phase begins without e
 | 0 | Design documentation | Complete |
 | 0.5 | Tooling and CI baseline | Complete |
 | 1 | Backend skeleton | Complete |
-| 2 | Detection engine + synthetic events | Planned (next) |
-| 3 | Alert pipeline (storage, REST, WebSocket) | Planned |
+| 2 | Detection engine + synthetic events | Complete |
+| 3 | Alert pipeline (storage, REST, WebSocket) | Planned (next) |
 | 4 | Frontend dashboard | Planned |
 | 5 | PCAP replay + Scapy hardening | Planned |
 | 6 | Docker lab + live sidecar capture | Planned |
@@ -97,7 +97,7 @@ Development proceeds **one approved phase at a time**. No phase begins without e
 - Threshold boundary tests pass: `N − 1` distinct ports → no alert, `N` → alert; likewise for the SYN detector.
 - SYN completion accounting is correct and bounded: an orphan SYN-ACK followed by an ACK adds **no** completion, and `0.0 ≤ completion_ratio ≤ 1.0` holds across the state-machine tests (see [DETECTION_RULES.md](DETECTION_RULES.md) §4.1–§4.2).
 - Detector state is partitioned by `source_type`: interleaving synthetic and replay events for the same hosts never merges into one window (§6).
-- Window, TTL and cooldown logic is driven by an injected clock over canonical logical event time (no `time.time()` in detectors); out-of-order and unreasonable timestamps are handled per [DETECTION_RULES.md](DETECTION_RULES.md) §2.1.
+- Window and TTL logic is driven by an injected clock over canonical logical event time (no `time.time()` in detectors); out-of-order and unreasonable timestamps are handled per [DETECTION_RULES.md](DETECTION_RULES.md) §2.1. **Cooldown timing is not in Phase 2 scope:** it belongs to the Phase 3 Alert Engine, which applies the deduplication/cooldown gate ([DETECTION_RULES.md](DETECTION_RULES.md) §5). Phase 2 loads and validates the `*_COOLDOWN_S` values but no detector consumes them.
 
 ---
 
@@ -198,4 +198,4 @@ Hardened deployment (reverse proxy, TLS, authenticated non-loopback exposure, se
 
 ## Recommended Next Phase
 
-**Phase 2 — Detection Engine + Synthetic Events**: typed schemas (`PacketEvent`, `CandidateAlert`, `Alert`), the clock-injected detector interface, the `portscan` and `synflood` detectors, and a labelled synthetic event generator.
+**Phase 3 — Alert Pipeline (Storage, REST, WebSocket)**: SQLite persistence, the cooldown/deduplication gate that finalises `CandidateAlert` objects into persisted `Alert` rows, the REST endpoints and authenticated ingest endpoint, and live WebSocket deltas.
