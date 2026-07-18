@@ -20,8 +20,8 @@ Development proceeds **one approved phase at a time**. No phase begins without e
 | 0.5 | Tooling and CI baseline | Complete |
 | 1 | Backend skeleton | Complete |
 | 2 | Detection engine + synthetic events | Complete |
-| 3 | Alert pipeline (storage, REST, WebSocket) | Planned (next) |
-| 4 | Frontend dashboard | Planned |
+| 3 | Alert pipeline (storage, REST, WebSocket) | Complete |
+| 4 | Frontend dashboard | Planned (next) |
 | 5 | PCAP replay + Scapy hardening | Planned |
 | 6 | Docker lab + live sidecar capture | Planned |
 | 7 | AI explanation layer | Planned |
@@ -198,4 +198,4 @@ Hardened deployment (reverse proxy, TLS, authenticated non-loopback exposure, se
 
 ## Recommended Next Phase
 
-**Phase 3 — Alert Pipeline (Storage, REST, WebSocket)**: SQLite persistence, the cooldown/deduplication gate that finalises `CandidateAlert` objects into persisted `Alert` rows, the REST endpoints and authenticated ingest endpoint, and live WebSocket deltas.
+**Phase 4 — Frontend Dashboard**: the React + Vite + Recharts dashboard over the now-complete Phase 3 API (REST history + WebSocket deltas; contract in [API.md](API.md)), including the persistent SYNTHETIC / REPLAYED / LIVE-LAB traffic-source banner.

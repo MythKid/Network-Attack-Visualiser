@@ -1,6 +1,7 @@
 """HTTP API layer for the Network Attack Visualiser backend.
 
-Phase 1 exposes only the health endpoint and its typed response model. Alert,
-statistics, ingest and WebSocket routes are added in later approved phases —
-see ``docs/DEVELOPMENT_PHASES.md``.
+Phase 1 provided the health endpoint; Phase 3 adds the alert and statistics
+read endpoints, the authenticated ingest endpoint with its body-size
+middleware, and the ``WS /api/v1/ws/alerts`` live delta feed. The full
+REST/WebSocket contract is documented in ``docs/API.md``.
 """

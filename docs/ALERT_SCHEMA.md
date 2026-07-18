@@ -1,6 +1,6 @@
 # Alert and Event Schemas
 
-**Document status:** Partially implemented. `PacketEvent` (§1), `CandidateAlert` (§2.0) and the `Alert` **model shape** (§2, including the evidence contents in §2.1) are **implemented in Phase 2**. Everything to do with persisting and maintaining an alert is **planned for Phase 3+**: the SQLite tables and DDL (§4), the `event_stats` aggregation (§3), the WebSocket envelope (§5), the retention/pruning rules (§6.1), and the `Alert` lifecycle fields the Alert Engine populates (`alert_id`, `created_at`, `dedup_key`, `occurrence_count`, `last_seen`) — the `Alert` model is defined but never constructed by Phase 2 code. The AI fields (`ai_explanation`, `ai_status`) are defined but remain inert until Phase 7. See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) for current status.
+**Document status:** Largely implemented. `PacketEvent` (§1), `CandidateAlert` (§2.0) and the `Alert` model (§2, §2.1) were implemented in Phase 2. **Implemented in Phase 3:** the SQLite tables and DDL (§4), the `event_stats` aggregation (§3), the WebSocket envelope (§5), the alert row cap from §6.1 (`ALERT_MAX_ROWS`), and the full `Alert` lifecycle (`alert_id`, `created_at`, `dedup_key`, `occurrence_count`, `last_seen`) via the Alert Engine's cooldown/deduplication gate. The REST/WebSocket contract these records are served through is specified in [API.md](API.md). **Still planned:** time-based retention and the pruning background task from §6.1 (`ALERT_RETENTION_DAYS`, `STATS_RETENTION_HOURS`) — deferred because retention days are wall-clock quantities while `created_at` is logical event time (see [API.md](API.md) §1.1); `event_stats` is therefore unbounded in Phase 3 (a recorded limitation). The AI fields (`ai_explanation`, `ai_status`) remain inert until Phase 7. See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) for current status.
 
 **Related documents:** [ARCHITECTURE.md](ARCHITECTURE.md), [DETECTION_RULES.md](DETECTION_RULES.md), [NETWORK_DESIGN.md](NETWORK_DESIGN.md), [SECURITY_REQUIREMENTS.md](SECURITY_REQUIREMENTS.md), [AI_EXPLANATION_DESIGN.md](AI_EXPLANATION_DESIGN.md).
 
@@ -111,7 +111,11 @@ This keeps the database small and honours the "prefer metadata, minimise storage
 ## 4. SQLite Schema (DDL)
 
 ```sql
-PRAGMA journal_mode = WAL;   -- concurrent dashboard reads during writes
+PRAGMA journal_mode = WAL;   -- durability/commit behaviour now; reader concurrency
+                             -- requires separate reader connections and is NOT
+                             -- realised by Phase 3's single shared connection
+                             -- (see ARCHITECTURE.md §5.4). File databases only:
+                             -- SQLite silently ignores WAL for ':memory:'.
 
 CREATE TABLE IF NOT EXISTS alerts (
     alert_id            TEXT    PRIMARY KEY,

@@ -8,10 +8,16 @@
 #
 # Phase 1 (backend skeleton): the FastAPI application, the ASGI server and the
 # typed settings stack. Plain `uvicorn` (no [standard] extras) is sufficient to
-# serve the app; performance extras and WebSocket support are added in the
-# phases that need them.
+# serve the app; performance extras are added only in the phases that need them.
+#
+# Phase 3 (alert pipeline): `websockets` provides the server-side WebSocket
+# protocol implementation for `WS /api/v1/ws/alerts`. Plain uvicorn ships no
+# WebSocket implementation, so without this the server rejects every upgrade
+# (Starlette's TestClient fakes WebSockets in-process and cannot catch that).
+# BSD-3-Clause; pure Python; uvicorn's default `auto` protocol selects it.
 
 fastapi==0.139.0
 uvicorn==0.51.0
 pydantic==2.13.4
 pydantic-settings==2.14.2
+websockets==16.1

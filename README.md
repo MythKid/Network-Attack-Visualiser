@@ -16,10 +16,11 @@ This project is for **education, research and authorised laboratory environments
 
 ## Project Status
 
-**Phases 0, 0.5, 1 and 2 are complete.** The Version 1 design specification (Phase 0), the quality and continuous-integration baseline (Phase 0.5), the **backend skeleton** (Phase 1) and the **detection engine + synthetic events** (Phase 2) are in place. The backend is a running FastAPI application with environment-driven typed configuration, a `GET /health` endpoint and interactive OpenAPI docs; alongside it are the typed domain schemas, the clock-injected `portscan` and `synflood` detectors, and a deterministic synthetic event generator, all covered by an extensive unit-test suite. Storage, the alert pipeline, the dashboard and the optional AI layer are introduced in later phases — development proceeds one approved phase at a time.
+**Phases 0 through 3 are complete.** On top of the design specification (Phase 0), the CI baseline (Phase 0.5), the backend skeleton (Phase 1) and the detection engine with synthetic events (Phase 2), the **alert pipeline** (Phase 3) is now in place: SQLite storage, the cooldown/deduplication Alert Engine, REST endpoints for alerts and statistics, a sensor-authenticated ingest endpoint with strict input limits, and live `alert.created` / `alert.updated` deltas over WebSocket. An authenticated batch of packet events flows end to end — detection → persisted alert → REST → live push — covered by an extensive deterministic test suite that includes a real-server WebSocket check. The dashboard, PCAP replay, the Docker lab and the optional AI layer are introduced in later phases — development proceeds one approved phase at a time.
 
 - Current progress: [docs/PROJECT_PROGRESS.md](docs/PROJECT_PROGRESS.md)
 - Phase plan and acceptance criteria: [docs/DEVELOPMENT_PHASES.md](docs/DEVELOPMENT_PHASES.md)
+- REST and WebSocket API contract: [docs/API.md](docs/API.md)
 
 ---
 
@@ -57,6 +58,7 @@ This project is for **education, research and authorised laboratory environments
 | [docs/NETWORK_DESIGN.md](docs/NETWORK_DESIGN.md) | Docker topology, the bridge traffic-visibility problem, capture strategy, WSL 2 caveats, privileges. |
 | [docs/DETECTION_RULES.md](docs/DETECTION_RULES.md) | Detector specifications, thresholds, severity, evidence, cooldown, false positives. |
 | [docs/ALERT_SCHEMA.md](docs/ALERT_SCHEMA.md) | Typed event and alert schemas, SQLite DDL, retention and privacy. |
+| [docs/API.md](docs/API.md) | REST and WebSocket contract: endpoints, semantics, limits, retry safety. |
 | [docs/SECURITY_REQUIREMENTS.md](docs/SECURITY_REQUIREMENTS.md) | Defensive mandate, container privilege, exposure, secrets, privacy. |
 | [docs/DEVELOPMENT_PHASES.md](docs/DEVELOPMENT_PHASES.md) | Phased delivery plan with acceptance criteria. |
 | [docs/TESTING_STRATEGY.md](docs/TESTING_STRATEGY.md) | Testing approach across all phases. |
@@ -90,10 +92,11 @@ PYTHONPATH=backend python -m app.main       # module entry point
 
 Then:
 
-- Health check: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health) → `{"status": "ok", "version": "0.2.0"}`
+- Health check: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health) → `{"status": "ok", "version": "0.3.0"}`
 - Interactive API docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- Alerts and statistics: `GET /api/v1/alerts`, `GET /api/v1/stats`; live deltas on `WS /api/v1/ws/alerts` — full contract in [docs/API.md](docs/API.md)
 
-Configuration is environment-driven with validated defaults; copy [.env.example](.env.example) to `.env` to override any value.
+Configuration is environment-driven with validated defaults; copy [.env.example](.env.example) to `.env` to override any value. The SQLite database is created at `DATABASE_PATH` (default `data/nav.sqlite3`) on startup — ephemeral lab data, git-ignored, safe to delete. The sensor ingest endpoint (`POST /api/v1/ingest/events`) requires a `SENSOR_TOKEN` to be configured and **fails closed with HTTP 503 until one is set**; it authenticates server-to-server sensors only and is never called by the browser.
 
 ### Quality checks
 
