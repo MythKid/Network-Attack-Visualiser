@@ -16,7 +16,7 @@ This project is for **education, research and authorised laboratory environments
 
 ## Project Status
 
-**Phases 0 through 3 are complete.** On top of the design specification (Phase 0), the CI baseline (Phase 0.5), the backend skeleton (Phase 1) and the detection engine with synthetic events (Phase 2), the **alert pipeline** (Phase 3) is now in place: SQLite storage, the cooldown/deduplication Alert Engine, REST endpoints for alerts and statistics, a sensor-authenticated ingest endpoint with strict input limits, and live `alert.created` / `alert.updated` deltas over WebSocket. An authenticated batch of packet events flows end to end — detection → persisted alert → REST → live push — covered by an extensive deterministic test suite that includes a real-server WebSocket check. The dashboard, PCAP replay, the Docker lab and the optional AI layer are introduced in later phases — development proceeds one approved phase at a time.
+**Phases 0 through 4 are complete.** On top of the design specification (Phase 0), the CI baseline (Phase 0.5), the backend skeleton (Phase 1), the detection engine with synthetic events (Phase 2) and the **alert pipeline** (Phase 3 — SQLite storage, the cooldown/deduplication Alert Engine, REST endpoints, a sensor-authenticated ingest endpoint and live `alert.created` / `alert.updated` deltas over WebSocket), the **frontend dashboard** (Phase 4) is now in place. It is a React + Vite + TypeScript + Recharts single-page app that loads alert history and statistics over REST, applies live deltas over WebSocket under a bounded, single-flight, version-aware synchronisation protocol, and presents overview statistics, a filterable alert feed, protocol-distribution and per-provenance traffic-timeline charts, an alert-detail view, and an unmissable **SYNTHETIC / REPLAYED / LIVE-LAB** provenance banner. Timestamps render as logical event time (synthetic and replay as event-time seconds, never wall-clock-relative). PCAP replay, the Docker lab and the optional AI layer are introduced in later phases — development proceeds one approved phase at a time.
 
 - Current progress: [docs/PROJECT_PROGRESS.md](docs/PROJECT_PROGRESS.md)
 - Phase plan and acceptance criteria: [docs/DEVELOPMENT_PHASES.md](docs/DEVELOPMENT_PHASES.md)
@@ -98,6 +98,27 @@ Then:
 
 Configuration is environment-driven with validated defaults; copy [.env.example](.env.example) to `.env` to override any value. The SQLite database is created at `DATABASE_PATH` (default `data/nav.sqlite3`) on startup — ephemeral lab data, git-ignored, safe to delete. The sensor ingest endpoint (`POST /api/v1/ingest/events`) requires a `SENSOR_TOKEN` to be configured and **fails closed with HTTP 503 until one is set**; it authenticates server-to-server sensors only and is never called by the browser.
 
+### Running the frontend
+
+The dashboard is a React + Vite + TypeScript app in [frontend/](frontend/). It is **read-only**: it calls the backend's `GET` endpoints and the WebSocket feed directly (cross-origin, governed by the backend CORS allowlist) and never holds the sensor token or calls the ingest endpoint.
+
+```bash
+cd frontend
+npm ci
+npm run dev        # Vite dev server on http://localhost:5173 (strict port)
+```
+
+The dev server is pinned to port **5173** to match the backend's default CORS / WebSocket `Origin` allowlist. The Node major is pinned by [frontend/.nvmrc](frontend/.nvmrc). Configure the backend URL with `VITE_API_BASE_URL` (default `http://localhost:8000`, from which the WebSocket URL is derived); copy [frontend/.env.example](frontend/.env.example) to `frontend/.env` to override. Other scripts:
+
+```bash
+npm run build          # tsc -b && vite build (production bundle in frontend/dist)
+npm run lint           # eslint
+npm run typecheck      # tsc -b --noEmit
+npm run test -- --run  # vitest (jsdom)
+```
+
+To see live data during development, run the Phase 3 backend with a `SENSOR_TOKEN` set and post synthetic events to `POST /api/v1/ingest/events` from a **server-side** script or `curl` (never from the browser).
+
 ### Quality checks
 
 Quality checks (all run in CI on Python 3.12 for every push and pull request):
@@ -110,7 +131,7 @@ pytest                  # tests
 pre-commit run --all-files
 ```
 
-Docker Compose validation is wired into CI **conditionally**: it is skipped while no Compose file exists and becomes a mandatory gate in Phase 6, when `docker-compose.yml` is introduced.
+A separate **`frontend`** CI job runs the dashboard's ESLint, type-check, Vitest suite and `vite build` on the Node major pinned in [frontend/.nvmrc](frontend/.nvmrc). Docker Compose validation is wired into CI **conditionally**: it is skipped while no Compose file exists and becomes a mandatory gate in Phase 6, when `docker-compose.yml` is introduced.
 
 ---
 

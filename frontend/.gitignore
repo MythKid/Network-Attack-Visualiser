@@ -1,0 +1,12 @@
+# Frontend build output and local tooling artefacts (ephemeral; never committed).
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local environment overrides — only .env.example is committed.
+.env
+.env.*
+!.env.example
+
+# Editor/OS noise.
+*.local

@@ -78,3 +78,39 @@ jobs:
           else
             echo "No Compose file present yet (introduced in Phase 6) — skipping Compose validation."
           fi
+
+  frontend:
+    name: Frontend lint, type-check, test and build
+    runs-on: ubuntu-latest
+
+    # All npm work happens inside frontend/; the Node major is pinned by
+    # frontend/.nvmrc as the single source of truth (used here and locally).
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies (npm ci)
+        run: npm ci
+
+      - name: Lint (eslint)
+        run: npm run lint
+
+      - name: Type-check (tsc -b --noEmit)
+        run: npm run typecheck
+
+      - name: Tests (vitest)
+        run: npm run test -- --run
+
+      - name: Build (tsc -b && vite build)
+        run: npm run build

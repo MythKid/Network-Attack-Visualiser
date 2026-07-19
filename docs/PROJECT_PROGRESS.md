@@ -1,6 +1,6 @@
 # Project Progress
 
-**Last updated:** 2026-07-17
+**Last updated:** 2026-07-19
 
 This file tracks delivery progress. It is updated at the end of every completed phase.
 
@@ -77,13 +77,25 @@ The pipeline beyond detection now exists end to end: an authenticated batch of e
 - **Configuration** — new documented variables: `DATABASE_PATH`, `CORS_ALLOW_ORIGINS` (wildcards rejected on load), `SENSOR_TOKEN` (secret, min 16 chars, no default), `INGEST_MAX_BATCH`, `INGEST_MAX_BODY_BYTES`, `MAX_CLOCK_SKEW_S`, `ALERT_MAX_ROWS`, `WS_MAX_QUEUE`.
 - **Version** — `0.2.0` → `0.3.0`.
 
+### Phase 4 — Frontend Dashboard (completed 2026-07-19)
+The React + Vite + TypeScript + Recharts dashboard now consumes the Phase 3 contract end to end: it loads alert history and provenance-scoped statistics over REST and applies live `alert.created` / `alert.updated` deltas over WebSocket, covered by a deterministic Vitest + React Testing Library suite. The Phase 3 backend was **not** modified and the application version remains `0.3.0`; the frontend carries its own `frontend/package.json` version (`0.4.0`).
+
+- **`frontend/` scaffold** — Vite (React + TypeScript, strict) with exact-pinned dependencies and a committed `package-lock.json`; the Node major is pinned by `frontend/.nvmrc`. Scripts: `dev` (port 5173, `strictPort`), `build` (`tsc -b && vite build`), `lint` (ESLint flat config + typescript-eslint), `typecheck` (`tsc -b --noEmit`), `test` (Vitest + jsdom).
+- **Runtime validation** (`src/validation/`) — hand-written type guards validate every REST response and WebSocket envelope (required fields, enum membership, recursive finiteness) before it is trusted: invalid REST is a protocol error with no partial install; invalid WS mutates nothing and triggers a re-sync; unknown envelope types are ignored.
+- **Synchronisation core** (`src/state/syncEngine.ts`) — a bounded, single-flight, version-aware engine. It buffers validated deltas, waits for the socket only up to a connect timeout (first render never blocks), installs a REST snapshot only when its scope generation is current, replays the buffer, then goes live. `occurrence_count` is the monotonic row version (no downgrades); every `alert.created` schedules a debounce-with-maximum-wait reconciliation because `ALERT_MAX_ROWS` pruning is global; `total` is authoritative from REST only; scope changes supersede and abort in flight while routine triggers coalesce to at most one follow-up; a snapshot failure preserves the last good snapshot (stale) or shows an error (no prior snapshot); a buffer overflow forces a fresh authoritative follow-up. Connection and data-freshness are independent state dimensions.
+- **WebSocket transport** (`src/ws/alertSocket.ts`) — a one-attempt lifecycle (attempt id + finalised flag + one reconnect timer): `onerror` records diagnostics only, the connect-timeout schedules its own single reconnect, remote `1000` recovers, explicit `1008` is a terminal configuration error, `1006`/abnormal closes back off with jitter, and repeated failures cap into an actionable offline state with manual retry. Timers and randomness are injected for deterministic tests.
+- **Presentation** — global provenance selector and a persistent SYNTHETIC / REPLAYED / LIVE-LAB banner; provenance-wide statistics polling; protocol-distribution and **per-provenance** traffic-timeline charts (separate event-time axes in "All"), each with a visually-hidden data table; a page-0-only filterable/sortable alert feed; alert detail exposing evidence, confidence and severity (heuristic, never asserted as certainty); an inert AI-explanation section; and event-time-safe timestamps (synthetic/replay as event-time seconds, never wall-clock-relative). Keyboard-operable, colour-independent, responsive and dark-mode aware.
+- **Tests** — 117 deterministic frontend tests (validation, config, API client, one-attempt socket lifecycle, reducer, sync engine incl. version-first membership / unknown off-page update reconciliation / reconcile-pending lifecycle / retry-failure scheduling / data-vs-connection retry / the no-delta-before-first-baseline invariant, single-flight stats polling + provenance masking incl. provenance-failure semantics, components/charts incl. exception-safe timeline formatting, out-of-range and future live timestamps, and the accessible live-feed announcement). `npm run lint`, `npm run typecheck`, `npm run test -- --run` and `npm run build` all pass.
+- **Dependencies** — runtime: `react`, `react-dom`, `react-is`, `recharts`; dev: `vite`, `@vitejs/plugin-react`, `typescript`, `typescript-eslint`, `eslint` (+ `@eslint/js`, react-hooks / react-refresh plugins, `globals`), `vitest`, `jsdom`, `@testing-library/*` and `@types/*`. All exact-pinned; no Redux/Zustand, Axios, date library, Zod or Playwright.
+- **CI** — a new `frontend` job in `.github/workflows/ci.yml` runs `npm ci`, lint, type-check, Vitest and `vite build` on the pinned Node major; the backend job is unchanged.
+
 ---
 
 ## Current Phase
 
-**Phase 3 — Alert Pipeline (Storage, REST, WebSocket): complete** (application version `0.3.0`). Ingest → detection → SQLite → REST → WebSocket works end to end and is covered by 401 deterministic tests; `ruff check`, `ruff format --check`, `mypy`, `pytest`, `pytest -W error` and `pre-commit` all pass locally.
+**Phase 4 — Frontend Dashboard: complete** (application/backend version unchanged at `0.3.0`; frontend `package.json` `0.4.0`). The dashboard loads REST history and provenance-scoped statistics and applies live WebSocket deltas under a bounded, single-flight, version-aware synchronisation protocol; the frontend suite (117 tests), ESLint, `tsc -b --noEmit` and `vite build` all pass. The Phase 3 backend was **not** modified, and on the **Python 3.12** CI target it passes `ruff check`, `ruff format --check`, `mypy`, `pytest`, `pytest -W error` and `pre-commit` (validated in a disposable 3.12 environment). Note: on the local **Python 3.14** venv, `pytest -W error` surfaces a `PytestUnraisableExceptionWarning` (a `ResourceWarning` for an sqlite connection finalised during GC) — a local-only 3.14 compatibility warning, not a backend change; it does not reproduce on 3.12.
 
-The frontend dashboard, PCAP replay, the Docker lab with live capture, and the AI layer do not exist yet. This is by design: development proceeds one approved phase at a time. The next planned unit of work is Phase 4 (frontend dashboard).
+PCAP replay, the Docker lab with live capture, and the AI layer do not exist yet. This is by design: development proceeds one approved phase at a time. The next planned unit of work is Phase 5 (PCAP replay + Scapy hardening).
 
 ---
 
@@ -95,8 +107,8 @@ The frontend dashboard, PCAP replay, the Docker lab with live capture, and the A
 | 1 | Backend skeleton (FastAPI, health endpoint, config) | **Complete** |
 | 2 | Detection engine + synthetic events | **Complete** |
 | 3 | Alert pipeline (SQLite storage, dedup/cooldown, REST, WebSocket) | **Complete** |
-| 4 | Frontend dashboard | Planned (next) |
-| 5 | PCAP replay + Scapy hardening | Planned |
+| 4 | Frontend dashboard | **Complete** |
+| 5 | PCAP replay + Scapy hardening | Planned (next) |
 | 6 | Docker lab + live sidecar capture | Planned |
 | 7 | AI explanation layer | Planned |
 | 8 | Hardening and polish | Planned |
@@ -122,4 +134,4 @@ Acceptance criteria for each phase are in [DEVELOPMENT_PHASES.md](DEVELOPMENT_PH
 
 ## Next Milestone
 
-**Phase 4 — Frontend Dashboard** (React + Vite + Recharts over the Phase 3 API: REST history plus WebSocket deltas per [API.md](API.md), overview statistics, live alert feed, filterable alert table, traffic timeline, protocol distribution, alert detail, and the persistent SYNTHETIC / REPLAYED / LIVE-LAB banner). Phase 4 must render alert timestamps as *event* time — never wall-clock-relative — per [API.md](API.md) §1.1. See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md). Not started; awaits explicit approval.
+**Phase 5 — PCAP Replay + Scapy Hardening** (the first real ingestion path: `scripts/generate_pcaps.py` producing scenario PCAPs unprivileged, and `ingest/pcap_replay.py` parsing and replaying them into the same detection pipeline with timing control, plus a malformed-packet corpus test). PCAPs are generated locally and never committed. See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md). Not started; awaits explicit approval.
