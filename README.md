@@ -16,7 +16,7 @@ This project is for **education, research and authorised laboratory environments
 
 ## Project Status
 
-**Phases 0 through 4 are complete.** On top of the design specification (Phase 0), the CI baseline (Phase 0.5), the backend skeleton (Phase 1), the detection engine with synthetic events (Phase 2) and the **alert pipeline** (Phase 3 — SQLite storage, the cooldown/deduplication Alert Engine, REST endpoints, a sensor-authenticated ingest endpoint and live `alert.created` / `alert.updated` deltas over WebSocket), the **frontend dashboard** (Phase 4) is now in place. It is a React + Vite + TypeScript + Recharts single-page app that loads alert history and statistics over REST, applies live deltas over WebSocket under a bounded, single-flight, version-aware synchronisation protocol, and presents overview statistics, a filterable alert feed, protocol-distribution and per-provenance traffic-timeline charts, an alert-detail view, and an unmissable **SYNTHETIC / REPLAYED / LIVE-LAB** provenance banner. Timestamps render as logical event time (synthetic and replay as event-time seconds, never wall-clock-relative). PCAP replay, the Docker lab and the optional AI layer are introduced in later phases — development proceeds one approved phase at a time.
+**Phases 0 through 5 are complete.** On top of the design specification (Phase 0), the CI baseline (Phase 0.5), the backend skeleton (Phase 1), the detection engine with synthetic events (Phase 2), the **alert pipeline** (Phase 3 — SQLite storage, the cooldown/deduplication Alert Engine, REST endpoints, a sensor-authenticated ingest endpoint and live `alert.created` / `alert.updated` deltas over WebSocket) and the **frontend dashboard** (Phase 4 — a React + Vite + TypeScript + Recharts single-page app that loads history over REST, applies live deltas over WebSocket under a bounded, single-flight, version-aware synchronisation protocol, and presents overview statistics, a filterable alert feed, protocol-distribution and per-provenance traffic-timeline charts, an alert-detail view, and an unmissable **SYNTHETIC / REPLAYED / LIVE-LAB** provenance banner), **PCAP replay** (Phase 5) is now in place. An unprivileged generator (`scripts/generate_pcaps.py`) produces the scenario captures locally, and a streaming, hardened Scapy ingester (`app.ingest.pcap_replay`, driven by `scripts/replay_pcap.py`) feeds them through the same detection, alert and statistics pipeline as `source_type="replay"` — in-process and never over the network, extracting only packet metadata. Timestamps render as logical event time (synthetic and replay as event-time seconds, never wall-clock-relative). The Docker lab and the optional AI layer are introduced in later phases — development proceeds one approved phase at a time.
 
 - Current progress: [docs/PROJECT_PROGRESS.md](docs/PROJECT_PROGRESS.md)
 - Phase plan and acceptance criteria: [docs/DEVELOPMENT_PHASES.md](docs/DEVELOPMENT_PHASES.md)
@@ -92,7 +92,7 @@ PYTHONPATH=backend python -m app.main       # module entry point
 
 Then:
 
-- Health check: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health) → `{"status": "ok", "version": "0.3.0"}`
+- Health check: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health) → `{"status": "ok", "version": "0.4.0"}`
 - Interactive API docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 - Alerts and statistics: `GET /api/v1/alerts`, `GET /api/v1/stats`; live deltas on `WS /api/v1/ws/alerts` — full contract in [docs/API.md](docs/API.md)
 
@@ -119,6 +119,20 @@ npm run test -- --run  # vitest (jsdom)
 
 To see live data during development, run the Phase 3 backend with a `SENSOR_TOKEN` set and post synthetic events to `POST /api/v1/ingest/events` from a **server-side** script or `curl` (never from the browser).
 
+### PCAP replay (Phase 5)
+
+Replay runs **in-process and never crosses the network** — it is not exposed as an HTTP endpoint and there is no upload mechanism. Generate the scenario captures locally (unprivileged; captures are git-ignored and never committed), then replay one into the pipeline:
+
+```bash
+python scripts/generate_pcaps.py                 # writes captures/{normal_traffic,port_scan,syn_burst}.pcap
+python scripts/replay_pcap.py captures/port_scan.pcap        # as fast as possible
+python scripts/replay_pcap.py captures/port_scan.pcap --speed 1   # paced at real time (>0, finite)
+```
+
+Every replayed event is `source_type="replay"` (this cannot be overridden), and only packet metadata is used — payloads are never read, stored or logged. Replay writes alerts to the configured `DATABASE_PATH`; the `REPLAY_*` variables in [.env.example](.env.example) bound file size, record count, batch size and pacing sleeps. Exit codes: `0` completed, `2` usage/invalid `--speed`, `3` packet-limit reached, `4` truncated capture, `5` a file-level `ReplayError`.
+
+**Visibility in a running dashboard.** The `replay_pcap.py` process runs separately from any live API server, so it does **not** push live WebSocket deltas to an open dashboard. Overview statistics refresh on their poll interval (~5 s); the **alert table** refreshes only when you change the provenance filter, reload, reconnect, or trigger a retry — this is the existing Phase 4 behaviour. Select the **REPLAYED** provenance to view replay alerts.
+
 ### Quality checks
 
 Quality checks (all run in CI on Python 3.12 for every push and pull request):
@@ -137,4 +151,6 @@ A separate **`frontend`** CI job runs the dashboard's ESLint, type-check, Vitest
 
 ## Licence
 
-Licensed under the **MIT License** — see [LICENSE](LICENSE). Copyright (c) 2026 Methindu Damsara.
+Licensed under the **GNU General Public License, version 2 only (GPL-2.0-only)** — see [LICENSE](LICENSE). Copyright (c) 2026 Methindu Damsara.
+
+**Why GPL-2.0-only.** From Phase 5 the project depends on [Scapy](https://scapy.net/), which is distributed under GPL-2.0-only, and imports it as a library. Adopting GPL-2.0-only for the project going forward is the chosen **conservative compliance posture** for combining with that dependency. This is a project licensing decision, **not legal advice**; the relevant copyright holders should be consulted before relying on it. The change applies to future releases only — **previously released versions remain available under the MIT licence they were published under**, and any future relicensing depends on the agreement of the relevant copyright holders.

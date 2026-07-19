@@ -21,8 +21,8 @@ Development proceeds **one approved phase at a time**. No phase begins without e
 | 1 | Backend skeleton | Complete |
 | 2 | Detection engine + synthetic events | Complete |
 | 3 | Alert pipeline (storage, REST, WebSocket) | Complete |
-| 4 | Frontend dashboard | Planned (next) |
-| 5 | PCAP replay + Scapy hardening | Planned |
+| 4 | Frontend dashboard | Complete |
+| 5 | PCAP replay + Scapy hardening | Complete |
 | 6 | Docker lab + live sidecar capture | Planned |
 | 7 | AI explanation layer | Planned |
 | 8 | Hardening and polish | Planned |
@@ -143,6 +143,14 @@ Development proceeds **one approved phase at a time**. No phase begins without e
 - Replaying the port-scan PCAP produces the expected `portscan` alert.
 - The replay ingester tolerates malformed, truncated, non-IP, IPv6 and unexpected-protocol frames without crashing (malformed-packet corpus test passes; see [TESTING_STRATEGY.md](TESTING_STRATEGY.md)).
 
+**Status: Complete.** As implemented:
+
+- **Deliverables:** `scripts/generate_pcaps.py` (reuses the synthetic scenario builders as the single source of truth) and `backend/app/ingest/pcap_replay.py`, plus a thin unprivileged runner `scripts/replay_pcap.py`. Replay is **in-process only** — no HTTP endpoint and no upload mechanism — feeding the existing `EventPipeline.process_batch`.
+- **Forced provenance:** every emitted event is `source_type="replay"`; no converter, replay function or CLI parameter can override it. **Metadata only** — payloads are never read, stored or logged.
+- **Hardening:** IPv6, ARP and other non-IPv4 frames are safely classified as unsupported and dropped; 802.1Q VLAN tags are traversed; non-first IPv4 fragments and missing-L4 frames become events with null ports/flags; a per-frame dissection error drops only that frame. Streaming uses Scapy `PcapReader` (never `rdpcap`) under configurable file-size, packet-count, batch and pacing limits (`REPLAY_*`).
+- **Outcomes/exit codes:** `completed` (0), `packet_limit_reached` (3), `truncated` (4); file-level failures raise `ReplayError` (CLI 5); argparse/invalid `--speed` (2). Acceleration is delivery-only, so paced and unpaced replay are alert- and statistics-identical.
+- **Dependency & licence:** adds `scapy==2.7.0` (GPL-2.0-only). The project is relicensed **MIT → GPL-2.0-only** going forward as a conservative compliance posture (see [SECURITY_REQUIREMENTS.md](SECURITY_REQUIREMENTS.md) and the README). The backend version becomes `0.4.0`. No frontend, detector-threshold or detector-semantic changes.
+
 ---
 
 ## Phase 6 — Docker Lab + Live Sidecar Capture
@@ -198,4 +206,4 @@ Hardened deployment (reverse proxy, TLS, authenticated non-loopback exposure, se
 
 ## Recommended Next Phase
 
-**Phase 4 — Frontend Dashboard**: the React + Vite + Recharts dashboard over the now-complete Phase 3 API (REST history + WebSocket deltas; contract in [API.md](API.md)), including the persistent SYNTHETIC / REPLAYED / LIVE-LAB traffic-source banner.
+**Phase 6 — Docker Lab + Live Sidecar Capture**: the isolated Compose lab and live capture via the sidecar sensor, reusing the same `PacketEvent` ingest contract the now-complete synthetic and PCAP-replay paths already feed. See [NETWORK_DESIGN.md](NETWORK_DESIGN.md) and this document's Phase 6 acceptance criteria.

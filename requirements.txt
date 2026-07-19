@@ -15,9 +15,17 @@
 # WebSocket implementation, so without this the server rejects every upgrade
 # (Starlette's TestClient fakes WebSockets in-process and cannot catch that).
 # BSD-3-Clause; pure Python; uvicorn's default `auto` protocol selects it.
+#
+# Phase 5 (PCAP replay + Scapy hardening): `scapy` provides `wrpcap` (unprivileged
+# PCAP authoring for the scenario generator) and `PcapReader` (streaming
+# dissection for the replay ingester). Only the offline replay path imports it;
+# the served API never does. File read/write is pure Python — libpcap is needed
+# only for live capture (Phase 6), so nothing is added to CI system packages.
+# GPL-2.0-only: the project adopts GPL-2.0-only going forward (see LICENSE).
 
 fastapi==0.139.0
 uvicorn==0.51.0
 pydantic==2.13.4
 pydantic-settings==2.14.2
 websockets==16.1
+scapy==2.7.0

@@ -1,6 +1,6 @@
 # Project Progress
 
-**Last updated:** 2026-07-19
+**Last updated:** 2026-07-20
 
 This file tracks delivery progress. It is updated at the end of every completed phase.
 
@@ -89,13 +89,24 @@ The React + Vite + TypeScript + Recharts dashboard now consumes the Phase 3 cont
 - **Dependencies** — runtime: `react`, `react-dom`, `react-is`, `recharts`; dev: `vite`, `@vitejs/plugin-react`, `typescript`, `typescript-eslint`, `eslint` (+ `@eslint/js`, react-hooks / react-refresh plugins, `globals`), `vitest`, `jsdom`, `@testing-library/*` and `@types/*`. All exact-pinned; no Redux/Zustand, Axios, date library, Zod or Playwright.
 - **CI** — a new `frontend` job in `.github/workflows/ci.yml` runs `npm ci`, lint, type-check, Vitest and `vite build` on the pinned Node major; the backend job is unchanged.
 
+### Phase 5 — PCAP Replay + Scapy Hardening (completed 2026-07-20)
+The first real ingestion path is in place: locally generated scenario captures replayed through the **existing** detection → alert → storage → statistics pipeline as `source_type="replay"`, with a hardened, streaming Scapy parser. No detection, alert, storage, statistics or frontend code changed; the backend version is bumped `0.3.0` → `0.4.0`.
+
+- **`backend/app/ingest/pcap_replay.py`** — a pure typed converter (`event_from_packet` → `Conversion`, classified `emitted` / `unsupported` / `invalid` / `parse_error`) and the `replay_pcap` driver feeding the existing `EventPipeline.process_batch`. Provenance is forced to `replay` (no public parameter or CLI flag can override it); only packet **metadata** is extracted, never payloads. Streaming uses `PcapReader` (never `rdpcap`) under configurable `REPLAY_MAX_FILE_BYTES` / `REPLAY_MAX_PACKETS` / `REPLAY_BATCH_SIZE` / `REPLAY_MAX_SLEEP_S` bounds, and the result holds counts only (no per-run delta list). Hardening: IPv6/ARP/non-IPv4 → dropped `unsupported`; 802.1Q VLAN traversed; non-first IPv4 fragments and missing-L4 frames → null ports/flags; unknown L4 → `OTHER`; a per-frame dissection error drops only that frame. Outcomes `completed` / `packet_limit_reached` / `truncated`; file-level failures raise `ReplayError`. Pacing (`speed`) sleeps between deliveries only and never alters timestamps, so paced and unpaced replay are alert- and statistics-identical.
+- **`scripts/generate_pcaps.py`** — unprivileged generator reusing the synthetic scenario builders as the single source of truth (`normal_traffic`, `port_scan`, `syn_burst`); captures are written locally and never committed (`.gitignore` blocks `*.pcap`).
+- **`scripts/replay_pcap.py`** — thin unprivileged runner building a broadcaster-free pipeline over `DATABASE_PATH`. There is **no** replay HTTP endpoint and **no** upload mechanism. Exit codes: `0` completed, `2` usage/invalid `--speed`, `3` packet-limit, `4` truncated, `5` `ReplayError`.
+- **Tests (new)** — `test_pcap_replay.py` (converter, corpus incl. VLAN/fragments, IPv6 drop, limits, pacing, forced provenance, resource cleanup under `ResourceWarning`), `test_generate_pcaps.py` (deterministic generation + timestamp/length round-trip), `test_replay_e2e.py` (port-scan → `portscan`, syn-burst → `synflood`, acceleration invariance of alerts **and** statistics, three repeated-replay characterisations, REST visibility of externally-committed rows, no WebSocket delta from a separate process via a bounded-timeout negative assertion, CLI exit codes).
+- **Dependency & licence** — adds `scapy==2.7.0` (GPL-2.0-only), imported only by the replay path (the served API never imports it). The project is relicensed **MIT → GPL-2.0-only** going forward as a conservative compliance posture — a project decision, not legal advice; previously released versions keep MIT.
+
 ---
 
 ## Current Phase
 
-**Phase 4 — Frontend Dashboard: complete** (application/backend version unchanged at `0.3.0`; frontend `package.json` `0.4.0`). The dashboard loads REST history and provenance-scoped statistics and applies live WebSocket deltas under a bounded, single-flight, version-aware synchronisation protocol; the frontend suite (117 tests), ESLint, `tsc -b --noEmit` and `vite build` all pass. The Phase 3 backend was **not** modified, and on the **Python 3.12** CI target it passes `ruff check`, `ruff format --check`, `mypy`, `pytest`, `pytest -W error` and `pre-commit` (validated in a disposable 3.12 environment). Note: on the local **Python 3.14** venv, `pytest -W error` surfaces a `PytestUnraisableExceptionWarning` (a `ResourceWarning` for an sqlite connection finalised during GC) — a local-only 3.14 compatibility warning, not a backend change; it does not reproduce on 3.12.
+**Phase 5 — PCAP Replay + Scapy Hardening: complete** (backend/application version `0.3.0` → `0.4.0`). Locally generated PCAPs replay through the existing pipeline as `source_type="replay"`; the port-scan capture yields a `portscan` alert and the SYN-burst capture a `synflood`, with a malformed-packet corpus (incl. VLAN and IPv4 fragments), acceleration invariance and CLI exit-code coverage. No detection, alert, storage, statistics or frontend code changed.
 
-PCAP replay, the Docker lab with live capture, and the AI layer do not exist yet. This is by design: development proceeds one approved phase at a time. The next planned unit of work is Phase 5 (PCAP replay + Scapy hardening).
+**Validation note.** `ruff check`, `ruff format --check` and `mypy` pass, and the full pre-existing backend suite (401 tests) stays green with the Phase 5 additions. The **new** Scapy-dependent tests and the replay scripts require `scapy==2.7.0`, whose installation was blocked in the local sandbox (network-restricted); they must be run in an environment with Scapy present — the **Python 3.12** CI target installs it from `requirements.txt`. (The prior local **Python 3.14** `ResourceWarning` note under `pytest -W error` still applies to the pre-existing suite and does not reproduce on 3.12.)
+
+The Docker lab with live capture and the AI layer do not exist yet — development proceeds one approved phase at a time. The next planned unit of work is Phase 6 (Docker lab + live sidecar capture).
 
 ---
 
@@ -108,8 +119,8 @@ PCAP replay, the Docker lab with live capture, and the AI layer do not exist yet
 | 2 | Detection engine + synthetic events | **Complete** |
 | 3 | Alert pipeline (SQLite storage, dedup/cooldown, REST, WebSocket) | **Complete** |
 | 4 | Frontend dashboard | **Complete** |
-| 5 | PCAP replay + Scapy hardening | Planned (next) |
-| 6 | Docker lab + live sidecar capture | Planned |
+| 5 | PCAP replay + Scapy hardening | **Complete** |
+| 6 | Docker lab + live sidecar capture | Planned (next) |
 | 7 | AI explanation layer | Planned |
 | 8 | Hardening and polish | Planned |
 | Post-V1 | Suricata integration; hardened deployment | Future |
@@ -124,7 +135,7 @@ Acceptance criteria for each phase are in [DEVELOPMENT_PHASES.md](DEVELOPMENT_PH
 - **Reads serialise behind ingest writes.** One shared SQLite connection: a `GET` issued while a batch commits waits for its write phase. WAL's concurrent-reader benefit needs separate reader connections — the natural upgrade if Phase 4 dashboard polling ever contends with Phase 6 live ingest (see [ARCHITECTURE.md](ARCHITECTURE.md) §5.4).
 - **Ingest is non-idempotent and retry-unsafe.** Documented for future sensor authors in [API.md](API.md) §6.1: neither a 500 nor a timeout may be blindly retried. A sensor-side delivery policy is a Phase 6 design item.
 - **The dedup/cooldown gate is in-memory.** A backend restart inside a cooldown window produces a new alert row on the next trigger rather than reinforcing the pre-restart row (per the documented gate design in [DETECTION_RULES.md](DETECTION_RULES.md) §5).
-- **Licence (resolved 2026-07-15).** Resolved in Phase 0.5: the project is licensed under the **MIT License** (`LICENSE`, Copyright (c) 2026 Methindu Damsara), referenced from the README. No longer an open decision.
+- **Licence (relicensed to GPL-2.0-only in Phase 5, 2026-07-20).** Phase 0.5 licensed the project MIT. Phase 5 adds Scapy (GPL-2.0-only) as a runtime dependency and imports it as a library, so the project is relicensed to **GPL-2.0-only** going forward as a conservative compliance posture (`LICENSE` now carries the GPL-2.0 text; README explains the rationale). This is a project licensing decision, **not legal advice**; previously released MIT versions retain their licence and any future relicensing depends on the agreement of the relevant copyright holders.
 - **Lab subnet collision check.** The lab uses `172.28.0.0/24` by default (overridable via `LAB_SUBNET`). A pre-flight collision check must be run before `docker compose up`; procedure documented in [NETWORK_DESIGN.md](NETWORK_DESIGN.md).
 - **Sensor `NET_RAW` capability approach.** `setcap cap_net_raw+eip` on the Python interpreter is **ruled out** because it conflicts with the mandatory `no-new-privileges: true` policy (the kernel ignores file capabilities on `execve` under `no_new_privs`). The mechanism is resolved by an **executable capability test in Phase 6** between exactly two candidates: (1) a verified non-root **ambient-capability** configuration (preferred if proven on the built image), or (2) a narrowly scoped **root-in-container** fallback (`cap_drop: [ALL]`, `cap_add: [NET_RAW]`, `no-new-privileges: true`, no `privileged`). Acceptance inspects the actual process capability sets. Full analysis in [NETWORK_DESIGN.md](NETWORK_DESIGN.md) §10.1.
 
@@ -134,4 +145,4 @@ Acceptance criteria for each phase are in [DEVELOPMENT_PHASES.md](DEVELOPMENT_PH
 
 ## Next Milestone
 
-**Phase 5 — PCAP Replay + Scapy Hardening** (the first real ingestion path: `scripts/generate_pcaps.py` producing scenario PCAPs unprivileged, and `ingest/pcap_replay.py` parsing and replaying them into the same detection pipeline with timing control, plus a malformed-packet corpus test). PCAPs are generated locally and never committed. See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md). Not started; awaits explicit approval.
+**Phase 6 — Docker Lab + Live Sidecar Capture** (`docker-compose.yml` and `lab/`: an isolated Compose network with an Nginx victim, a safe traffic generator and a sidecar sensor that captures live traffic and posts `PacketEvent` batches to the existing authenticated ingest endpoint — the same contract synthetic and PCAP replay already feed). Compose validation becomes a mandatory CI gate. See [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md) and [NETWORK_DESIGN.md](NETWORK_DESIGN.md). Not started; awaits explicit approval.

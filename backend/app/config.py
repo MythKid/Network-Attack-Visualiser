@@ -134,6 +134,43 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ------------------------------------------------------------------ #
+    # Phase 5 — PCAP replay (in-process ingester; see docs/SECURITY_REQUIREMENTS.md)
+    # ------------------------------------------------------------------ #
+
+    replay_max_file_bytes: int = Field(
+        default=50_000_000,
+        ge=1,
+        description=(
+            "Maximum PCAP file size accepted by the replay ingester, checked via "
+            "os.stat before opening; a larger file raises ReplayError."
+        ),
+    )
+    replay_max_packets: int = Field(
+        default=1_000_000,
+        ge=1,
+        description=(
+            "Maximum physical PCAP records read for replay (including dropped "
+            "frames). Reaching it with more records remaining ends the run as "
+            "'packet_limit_reached' (incomplete)."
+        ),
+    )
+    replay_batch_size: int = Field(
+        default=500,
+        ge=1,
+        description=(
+            "Number of replay events per pipeline batch when running unpaced "
+            "(speed is None). Paced replay (speed set) processes one event per batch."
+        ),
+    )
+    replay_max_sleep_s: PositiveFiniteFloat = Field(
+        default=2.0,
+        description=(
+            "Upper clamp on a single inter-packet pacing sleep during paced "
+            "replay; the captured event timestamp is never changed by pacing."
+        ),
+    )
+
     @field_validator("cors_allow_origins", mode="before")
     @classmethod
     def _split_and_check_origins(cls, value: object) -> tuple[str, ...]:

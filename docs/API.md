@@ -145,6 +145,8 @@ The client reconciles deltas against its REST snapshot, keyed by `alert_id`.
 
 ---
 
+> **PCAP replay is not an API surface (Phase 5).** Replay runs **in-process** via `app.ingest.pcap_replay` and the unprivileged `scripts/replay_pcap.py` runner; it feeds `EventPipeline.process_batch` directly as `source_type="replay"` and is **not** exposed as an HTTP endpoint (there is no upload mechanism). This ingest endpoint and its `X-Sensor-Token` remain the **live** sensor path only. A separate replay process has no WebSocket broadcaster, so its committed alerts surface through the REST endpoints above (filter with `?source_type=replay`) but do **not** appear as live `WS` deltas in an already-open dashboard — the alert table reflects them after a filter change, reload or reconnect, and statistics after their next poll.
+
 ## 6. Ingest — `POST /api/v1/ingest/events`
 
 The sensor→backend boundary. Browsers never call this endpoint.
